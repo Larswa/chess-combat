@@ -1,0 +1,7 @@
+fastapi
+python-chess
+sqlalchemy
+psycopg2-binary
+requests
+pytest
+openai
