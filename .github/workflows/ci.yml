@@ -34,6 +34,9 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+    - name: Create database tables
+      run: |
+        python -c "from app.db.models import Base; from app.db.crud import engine; Base.metadata.create_all(bind=engine)"
     - name: Run tests
       run: |
         pytest
