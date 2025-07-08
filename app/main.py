@@ -8,6 +8,10 @@ from app.ai.openai_ai import get_openai_chess_move
 from app.ai.gemini_ai import get_gemini_chess_move
 import chess
 from contextlib import asynccontextmanager
+from pydantic import BaseModel
+
+class PlayerCreate(BaseModel):
+    name: str
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,9 +40,9 @@ def read_game(game_id: int, db: Session = Depends(get_db)):
     return {"id": game.id, "white_id": game.white_id, "black_id": game.black_id, "created_at": str(game.created_at)}
 
 @app.post("/players/")
-def create_player_endpoint(name: str = Body(...), db: Session = Depends(get_db)):
-    player = create_player(db, name)
-    return {"id": player.id, "name": player.name}
+def create_player_endpoint(player: PlayerCreate, db: Session = Depends(get_db)):
+    player_obj = create_player(db, player.name)
+    return {"id": player_obj.id, "name": player_obj.name}
 
 @app.post("/ai-vs-ai/")
 def ai_vs_ai(
