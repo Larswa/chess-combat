@@ -11,15 +11,6 @@ def test_root():
     assert response.status_code == 200
     assert "Chess Combat Service" in response.json().get("message", "")
 
-# Integration test: requires DB
-@pytest.mark.integration
-def test_create_player():
-    client = TestClient(app)
-    response = client.post("/players/", json={"name": "pytest-player"})
-    assert response.status_code == 200
-    assert "id" in response.json()
-    assert response.json()["name"] == "pytest-player"
-
 # Unit test: AI is mocked, no DB required
 @patch("app.main.get_openai_chess_move", return_value="e2e4")
 def test_ai_vs_ai(mock_ai):

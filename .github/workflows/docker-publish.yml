@@ -23,7 +23,7 @@ jobs:
         with:
           registry: nexuscr.factus.dk
           username: ${{ secrets.NEXUS_USER }}
-          password: ${{ secrets.NEXUS_USER?PASSWORD }}
+          password: ${{ secrets.NEXUS_USER_PASSWORD }}
 
       - name: Run unit tests only (skip integration)
         run: pytest -m "not integration"
