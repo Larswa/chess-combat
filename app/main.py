@@ -48,6 +48,7 @@ def ai_vs_ai(
     board = chess.Board(fen)
     move_history = moves.copy()
     ai_moves = []
+    invalid_moves = []
     def get_ai_move():
         if ai == "gemini":
             return get_gemini_chess_move(board.fen(), move_history)
@@ -57,36 +58,37 @@ def ai_vs_ai(
         move_uci = get_ai_move()
         try:
             move = chess.Move.from_uci(move_uci)
-            if enforce_rules:
-                if move in board.legal_moves:
+            if move in board.pseudo_legal_moves:
+                if enforce_rules:
+                    if move in board.legal_moves:
+                        board.push(move)
+                        move_history.append(move_uci)
+                        ai_moves.append(move_uci)
+                    else:
+                        invalid_moves.append({"move": move_uci, "fen": board.fen(), "reason": "illegal"})
+                else:
                     board.push(move)
                     move_history.append(move_uci)
                     ai_moves.append(move_uci)
-                else:
-                    return False, f"Illegal move from AI: {move_uci}"
             else:
-                board.push(move)
-                move_history.append(move_uci)
-                ai_moves.append(move_uci)
+                invalid_moves.append({"move": move_uci, "fen": board.fen(), "reason": "not pseudo-legal"})
             return True, None
         except Exception as e:
-            return False, str(e)
+            invalid_moves.append({"move": move_uci, "fen": board.fen(), "reason": str(e)})
+            return True, None  # Continue autoplay
     if auto_play:
         while not board.is_game_over():
-            ok, err = play_one_move()
-            if not ok:
-                return {"error": err, "move_history": move_history}
+            play_one_move()
     else:
         for _ in range(2):  # Each AI makes one move (white, then black)
             if board.is_game_over():
                 break
-            ok, err = play_one_move()
-            if not ok:
-                return {"error": err, "move_history": move_history}
+            play_one_move()
     return {
         "fen": board.fen(),
         "move_history": move_history,
         "ai_moves": ai_moves,
+        "invalid_moves": invalid_moves,
         "game_over": board.is_game_over(),
         "result": board.result() if board.is_game_over() else None
     }
