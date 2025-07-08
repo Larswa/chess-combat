@@ -1,0 +1,2 @@
+# This file contains the current version of the application
+0.1.0
