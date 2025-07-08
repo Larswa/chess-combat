@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from sqlalchemy import text
 
 @pytest.fixture(autouse=True)
 def cleanup_player():
@@ -8,10 +9,10 @@ def cleanup_player():
     from app.db.crud import SessionLocal
     db = SessionLocal()
     try:
-        db.execute("DELETE FROM players WHERE name = 'pytest-player'")
+        db.execute(text("DELETE FROM players WHERE name = 'pytest-player'"))
         db.commit()
         yield
-        db.execute("DELETE FROM players WHERE name = 'pytest-player'")
+        db.execute(text("DELETE FROM players WHERE name = 'pytest-player'"))
         db.commit()
     finally:
         db.close()
