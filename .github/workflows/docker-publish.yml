@@ -37,7 +37,7 @@ jobs:
         with:
           registry: nexuscr.factus.dk
           username: ${{ secrets.NEXUS_USER }}
-          password: ${{ secrets.NEXUS_USER_PASSWORD }}
+          password: ${{ secrets.NEXUS_USER_PW }}
 
       - name: Set DATABASE_URL env var
         run: echo "DATABASE_URL=postgresql://chess:chess@localhost:5432/chess" >> $GITHUB_ENV
