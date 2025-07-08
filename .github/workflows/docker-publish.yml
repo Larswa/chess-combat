@@ -25,6 +25,9 @@ jobs:
           username: ${{ secrets.NEXUS_USER }}
           password: ${{ secrets.NEXUS_USER?PASSWORD }}
 
+      - name: Run unit tests only (skip integration)
+        run: pytest -m "not integration"
+
       - name: Get and bump version
         id: get_version
         run: |

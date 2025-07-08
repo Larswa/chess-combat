@@ -7,8 +7,16 @@ from app.db.models import Base
 from app.ai.openai_ai import get_openai_chess_move
 from app.ai.gemini_ai import get_gemini_chess_move
 import chess
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup code
+    Base.metadata.create_all(bind=SessionLocal.kw["bind"])
+    yield
+    # Shutdown code (if any)
+
+app = FastAPI(lifespan=lifespan)
 app.include_router(ui_router)
 
 # Dependency for DB session
@@ -18,11 +26,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-@app.on_event("startup")
-def startup():
-    # Create tables if they don't exist
-    Base.metadata.create_all(bind=SessionLocal.kw["bind"])
 
 # Example endpoint using DB
 @app.get("/games/{game_id}")
