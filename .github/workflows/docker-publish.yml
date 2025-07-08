@@ -63,7 +63,7 @@ jobs:
           if git describe --tags --abbrev=0 2>/dev/null; then
             VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
           else
-            VERSION=$(cat VERSION.txt)
+            VERSION=$(grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+' VERSION.txt)
           fi
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           PATCH=$((PATCH+1))
