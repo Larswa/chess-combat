@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chess-combat.fullname" . }}
+  labels:
+    app: {{ include "chess-combat.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "chess-combat.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "chess-combat.name" . }}
+    spec:
+      containers:
+        - name: chess-combat
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.env.OPENAI_API_KEY_SECRET }}
+                  key: api-key
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.env.GEMINI_API_KEY_SECRET }}
+                  key: api-key
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.env.POSTGRES_CONNECTION_SECRET }}
+                  key: connection
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

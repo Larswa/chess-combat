@@ -94,3 +94,18 @@ jobs:
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }}
+
+      - name: Package Helm chart
+        run: |
+          helm package ./deployment/chess-combat --destination ./deployment/chess-combat
+
+      - name: Push Helm chart to Nexus
+        env:
+          HELM_REPO_URL: https://nexus.factus.dk/repository/helm/chess-battle
+          HELM_USERNAME: ${{ secrets.NEXUS_USER }}
+          HELM_PASSWORD: ${{ secrets.NEXUS_USER_PW }}
+        run: |
+          CHART_PACKAGE=$(ls ./deployment/chess-combat/chess-combat-*.tgz | head -n1)
+          helm repo add chess-battle $HELM_REPO_URL --username $HELM_USERNAME --password $HELM_PASSWORD --force-update || true
+          helm cm-push $CHART_PACKAGE chess-battle --username $HELM_USERNAME --password $HELM_PASSWORD || \
+            curl -u $HELM_USERNAME:$HELM_PASSWORD --upload-file $CHART_PACKAGE $HELM_REPO_URL/

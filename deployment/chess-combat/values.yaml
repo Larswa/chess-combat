@@ -1,0 +1,28 @@
+replicaCount: 1
+
+image:
+  repository: nexuscr.factus.dk/chess-combat
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chess-combat.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+
+env:
+  OPENAI_API_KEY_SECRET: openai-api-key
+  GEMINI_API_KEY_SECRET: gemini-api-key
+  POSTGRES_CONNECTION_SECRET: postgres-connection
