@@ -1,5 +1,5 @@
 # Entry point for the FastAPI app
-from fastapi import FastAPI, Depends, Body, Query
+from fastapi import FastAPI, Depends, Body, Query, status, HTTPException
 from sqlalchemy.orm import Session
 from app.ui.routes import router as ui_router
 from app.db.crud import SessionLocal, get_game, create_player
@@ -9,9 +9,17 @@ from app.ai.gemini_ai import get_gemini_chess_move
 import chess
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 
 class PlayerCreate(BaseModel):
     name: str
+
+class GameCreate(BaseModel):
+    white_id: int
+    black_id: int
+
+class MoveCreate(BaseModel):
+    move: str
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,8 +49,24 @@ def read_game(game_id: int, db: Session = Depends(get_db)):
 
 @app.post("/players/")
 def create_player_endpoint(player: PlayerCreate, db: Session = Depends(get_db)):
-    player_obj = create_player(db, player.name)
-    return {"id": player_obj.id, "name": player_obj.name}
+    try:
+        player_obj = create_player(db, player.name)
+        return {"id": player_obj.id, "name": player_obj.name}
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Player name already exists")
+
+@app.post("/games/", status_code=status.HTTP_200_OK)
+def create_game_endpoint(game: GameCreate, db: Session = Depends(get_db)):
+    from app.db.crud import create_game
+    game_obj = create_game(db, game.white_id, game.black_id)
+    return {"id": game_obj.id, "white_id": game_obj.white_id, "black_id": game_obj.black_id}
+
+@app.post("/games/{game_id}/moves", status_code=status.HTTP_200_OK)
+def add_move_endpoint(game_id: int, move: MoveCreate, db: Session = Depends(get_db)):
+    from app.db.crud import add_move
+    move_obj = add_move(db, game_id, move.move)
+    return {"id": move_obj.id, "game_id": move_obj.game_id, "move": move_obj.move}
 
 @app.post("/ai-vs-ai/")
 def ai_vs_ai(

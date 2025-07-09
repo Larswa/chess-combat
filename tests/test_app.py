@@ -19,3 +19,16 @@ def test_ai_vs_ai(mock_ai):
     assert response.status_code == 200
     assert "fen" in response.json()
     assert "move_history" in response.json()
+
+# Unit test for create_player (no DB commit)
+def test_create_player_model():
+    from app.db.models import Player
+    player = Player(name="unit-test-player")
+    assert player.name == "unit-test-player"
+
+# Unit test for move model
+def test_move_model():
+    from app.db.models import Move
+    move = Move(game_id=1, move="e2e4")
+    assert move.move == "e2e4"
+    assert move.game_id == 1

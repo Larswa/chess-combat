@@ -95,13 +95,17 @@ jobs:
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }}
 
+      - name: Install Helm push plugin
+        run: |
+          helm plugin install https://github.com/chartmuseum/helm-push.git || echo "plugin already installed"
+
       - name: Package Helm chart
         run: |
           helm package ./deployment/chess-combat --destination ./deployment/chess-combat
 
       - name: Push Helm chart to Nexus
         env:
-          HELM_REPO_URL: https://nexus.factus.dk/repository/helm/
+          HELM_REPO_URL: https://nexus.factus.dk/repository/helm/chess-battle
           HELM_USERNAME: ${{ secrets.NEXUS_USER }}
           HELM_PASSWORD: ${{ secrets.NEXUS_USER_PW }}
         run: |
