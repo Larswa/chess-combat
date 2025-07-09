@@ -108,7 +108,7 @@ jobs:
 
       - name: Push Helm chart to Nexus
         env:
-          HELM_REPO_URL: https://nexus.factus.dk/repository/helm/chess-battle
+          HELM_REPO_URL: https://nexus.factus.dk/repository/helm/
           HELM_USERNAME: ${{ secrets.NEXUS_USER }}
           HELM_PASSWORD: ${{ secrets.NEXUS_USER_PW }}
         run: |
