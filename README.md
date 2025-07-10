@@ -23,5 +23,18 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 
 
+For Powershell
+# 1. Create the venv
+python -m venv .venv
+
+# 2. Activate it (dot-source the Activate.ps1 script)
+. .\.venv\Scripts\Activate.ps1
+
+# 3. Install your requirements
+pip install -r requirements.txt
+
+
+
+
 URL for swagger endpoint. There is no UI yet.  😊
 http://127.0.0.1:8000/docs#/default
