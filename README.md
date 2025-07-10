@@ -38,3 +38,14 @@ pip install -r requirements.txt
 
 URL for swagger endpoint. There is no UI yet.  😊
 http://127.0.0.1:8000/docs#/default
+
+
+
+
+Teodor ... Når du starter
+
+. .\.venv\Scripts\Activate.ps1
+$ENV:OPENAI_API_KEY=<openapikey>
+Start docker-desktop
+og start postgres container med
+docker start chess-postgres
