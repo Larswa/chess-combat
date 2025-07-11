@@ -8,16 +8,49 @@ import uuid
 def cleanup_player():
     # Cleanup before and after each test
     from app.db.crud import SessionLocal
+    from app.db.models import Base
+    from app.db.crud import engine
+
+    # Ensure tables exist
+    Base.metadata.create_all(bind=engine)
+
     db = SessionLocal()
     try:
-        db.execute(text("DELETE FROM moves WHERE game_id IN (SELECT id FROM games WHERE white_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%') OR black_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%'))"))
-        db.execute(text("DELETE FROM games WHERE white_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%') OR black_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%')"))
-        db.execute(text("DELETE FROM players WHERE name LIKE 'pytest-player%'"))
+        # Clean up test data - use try/except to handle missing tables
+        try:
+            db.execute(text("DELETE FROM moves WHERE game_id IN (SELECT id FROM games WHERE white_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%') OR black_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%'))"))
+        except Exception:
+            pass  # Table might not exist yet
+
+        try:
+            db.execute(text("DELETE FROM games WHERE white_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%') OR black_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%')"))
+        except Exception:
+            pass
+
+        try:
+            db.execute(text("DELETE FROM players WHERE name LIKE 'pytest-player%'"))
+        except Exception:
+            pass
+
         db.commit()
         yield
-        db.execute(text("DELETE FROM moves WHERE game_id IN (SELECT id FROM games WHERE white_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%') OR black_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%'))"))
-        db.execute(text("DELETE FROM games WHERE white_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%') OR black_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%')"))
-        db.execute(text("DELETE FROM players WHERE name LIKE 'pytest-player%'"))
+
+        # Cleanup after test
+        try:
+            db.execute(text("DELETE FROM moves WHERE game_id IN (SELECT id FROM games WHERE white_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%') OR black_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%'))"))
+        except Exception:
+            pass
+
+        try:
+            db.execute(text("DELETE FROM games WHERE white_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%') OR black_id IN (SELECT id FROM players WHERE name LIKE 'pytest-player%')"))
+        except Exception:
+            pass
+
+        try:
+            db.execute(text("DELETE FROM players WHERE name LIKE 'pytest-player%'"))
+        except Exception:
+            pass
+
         db.commit()
     finally:
         db.close()
