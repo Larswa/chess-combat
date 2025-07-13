@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 import os
 import chess
 import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
@@ -20,6 +23,7 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 
 @router.get("/", response_class=HTMLResponse)
 def chess_game(request: Request):
+    logger.info("Serving chess game UI")
     return templates.TemplateResponse(request, "chess_game.html")
 
 # --- API for UI ---
@@ -30,10 +34,11 @@ def api_new_game(data: dict = Body(...), db: Session = Depends(get_db)):
     Create a new game. Expects: {mode: 'human-vs-ai'|'ai-vs-ai', color: 'white'|'black', ai_engine: 'random'|'openai'|'gemini'}
     Returns: {game_id, fen, moves: []}
     """
+    logger.info(f"Creating new game: {data}")
     mode = data.get('mode')
     color = data.get('color')
     ai_engine = data.get('ai_engine', 'random')
-    
+
     # For now, create two players (Human and AI) or two AIs
     if mode == 'human-vs-ai':
         white_name = 'Human' if color == 'white' else f'AI_{ai_engine}'
@@ -41,12 +46,15 @@ def api_new_game(data: dict = Body(...), db: Session = Depends(get_db)):
     else:
         white_name = f'AI1_{ai_engine}'
         black_name = f'AI2_{ai_engine}'
+
+    logger.debug(f"Creating players: white={white_name}, black={black_name}")
     # Ensure players exist
     white_player = create_player(db, white_name)
     black_player = create_player(db, black_name)
     # Create game
     game = create_game(db, white_player.id, black_player.id)
     board = chess.Board()
+    logger.info(f"Created game {game.id} with players {white_player.id} vs {black_player.id}")
     return {"game_id": game.id, "fen": board.fen(), "moves": []}
 
 @router.post("/api/move")
@@ -55,13 +63,15 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
     Make a move. Expects: {game_id, move: 'e2e4', enforce_rules: true/false, ai_engine: 'random'|'openai'|'gemini'}
     Returns: {fen, moves, status}
     """
+    logger.info(f"Processing move: {data}")
     game_id = data.get('game_id')
     move_uci = data.get('move')
     enforce_rules = data.get('enforce_rules', True)  # Default to True
     ai_engine = data.get('ai_engine', 'random')
-    
+
     game = get_game(db, game_id)
     if not game:
+        logger.warning(f"Game {game_id} not found")
         raise HTTPException(status_code=404, detail="Game not found")
 
     # Rebuild board from moves
@@ -107,21 +117,21 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
             mode = 'human-vs-ai'
         elif ('AI1_' in game.white.name and 'AI2_' in game.black.name):
             mode = 'ai-vs-ai'
-    
+
     # AI move logic for both human-vs-ai and ai-vs-ai modes
     should_make_ai_move = False
     if mode == 'human-vs-ai' and (not enforce_rules or not board.is_game_over()):
         should_make_ai_move = True
     elif mode == 'ai-vs-ai' and (not enforce_rules or not board.is_game_over()):
         should_make_ai_move = True
-    
+
     if should_make_ai_move:
         # Get move history for AI
         move_history = [m.move for m in game.moves]
-        
+
         # Get AI move using the selected engine
         ai_move = get_ai_move(ai_engine, board, board.fen(), move_history, enforce_rules)
-        
+
         if ai_move:
             if enforce_rules:
                 try:
@@ -132,7 +142,7 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
                     if legal_moves:
                         ai_move = random.choice([m.uci() for m in legal_moves])
                         board.push_uci(ai_move)
-            
+
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
@@ -170,11 +180,11 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
     game_id = data.get('game_id')
     enforce_rules = data.get('enforce_rules', True)
     ai_engine = data.get('ai_engine', 'random')
-    
+
     game = get_game(db, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    
+
     # Rebuild board from moves
     import chess
     board = chess.Board()
@@ -187,20 +197,20 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
                 board.push_uci(m)
             except:
                 pass
-    
+
     # Check game mode
     mode = None
     if hasattr(game, 'white') and hasattr(game, 'black'):
         if ('AI1_' in game.white.name and 'AI2_' in game.black.name):
             mode = 'ai-vs-ai'
-    
+
     if mode == 'ai-vs-ai' and (not enforce_rules or not board.is_game_over()):
         # Get move history for AI
         move_history = [m.move for m in game.moves]
-        
+
         # Get AI move using the selected engine
         ai_move = get_ai_move(ai_engine, board, board.fen(), move_history, enforce_rules)
-        
+
         if ai_move:
             if enforce_rules:
                 try:
@@ -211,11 +221,11 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
                     if legal_moves:
                         ai_move = random.choice([m.uci() for m in legal_moves])
                         board.push_uci(ai_move)
-            
+
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
-    
+
     return {"fen": board.fen(), "moves": moves, "status": "no_move"}
 
 def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True):
@@ -236,7 +246,7 @@ def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True):
             print(f"Gemini API error: {e}")
             # Fallback to random move
             ai_engine = 'random'
-    
+
     # Random moves (fallback or selected)
     if enforce_rules:
         legal_moves = list(board.legal_moves)
@@ -258,5 +268,5 @@ def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True):
         while to_square == from_square:
             to_square = random.choice(squares)
         return from_square + to_square
-    
+
     return None
