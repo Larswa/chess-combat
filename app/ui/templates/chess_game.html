@@ -9,6 +9,26 @@
         body { font-family: Arial, sans-serif; margin: 2em; }
         #board { width: 400px; margin-bottom: 1em; }
         .controls { margin-bottom: 1em; }
+        .controls label { 
+            display: inline-block; 
+            margin-right: 15px; 
+            margin-bottom: 10px; 
+        }
+        .controls input[type="checkbox"] { 
+            margin-right: 5px; 
+        }
+        #start-game-btn {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #start-game-btn:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -26,6 +46,9 @@
                 <option value="black">Black</option>
             </select>
         </label>
+        <label>
+            <input type="checkbox" id="enforce-rules" checked> Enforce Chess Rules
+        </label>
         <button type="button" id="start-game-btn">Start New Game</button>
     </form>
     <div id="board"></div>
@@ -42,6 +65,7 @@
         let gameId = null;
         let gameMode = 'human-vs-ai';
         let playerColor = 'white';
+        let enforceRules = true;
 
         console.log('jQuery loaded:', typeof $ !== 'undefined');
         console.log('Chess.js loaded:', typeof Chess !== 'undefined');
@@ -85,7 +109,11 @@
                 const res = await fetch('/api/new-game', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode: mode, color: color })
+                    body: JSON.stringify({ 
+                        mode: mode, 
+                        color: color, 
+                        enforce_rules: enforceRules 
+                    })
                 });
                 
                 if (!res.ok) {
@@ -117,7 +145,11 @@
             const res = await fetch('/api/move', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ game_id: gameId, move })
+                body: JSON.stringify({ 
+                    game_id: gameId, 
+                    move: move,
+                    enforce_rules: enforceRules 
+                })
             });
             const data = await res.json();
             if (data.status && data.status.startsWith('invalid')) {
@@ -140,21 +172,27 @@
         function onDragStart (source, piece, position, orientation) {
             if (gameMode === 'ai-vs-ai') return false;
             if ((game.turn() === 'w' && playerColor !== 'white') || (game.turn() === 'b' && playerColor !== 'black')) return false;
-            if (game.game_over()) return false;
+            if (enforceRules && game.game_over()) return false;
         }
 
         async function onDrop (source, target) {
             // Only allow moves if game is active
             if (!gameId) return 'snapback';
-            const move = game.move({ from: source, to: target, promotion: 'q' });
-            if (move === null) return 'snapback';
+            
+            // If rules are enforced, validate the move with chess.js
+            if (enforceRules) {
+                const move = game.move({ from: source, to: target, promotion: 'q' });
+                if (move === null) return 'snapback';
+            }
+            
             // Send move to backend
             const result = await sendMoveToBackend(source, target);
             if (result === 'snapback') {
-                game.undo();
+                if (enforceRules) {
+                    game.undo();
+                }
                 return 'snapback';
             }
-            // TODO: For human-vs-ai, fetch AI move and update board
         }
 
         function onSnapEnd () {
@@ -180,6 +218,10 @@
         document.getElementById('player-color').addEventListener('change', function() {
             playerColor = this.value;
             console.log('Player color changed to:', playerColor);
+        });
+        document.getElementById('enforce-rules').addEventListener('change', function() {
+            enforceRules = this.checked;
+            console.log('Enforce rules changed to:', enforceRules);
         });
         document.getElementById('start-game-btn').addEventListener('click', function(e) {
             e.preventDefault();
