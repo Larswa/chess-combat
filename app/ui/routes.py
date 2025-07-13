@@ -5,6 +5,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+
+
+# Main UI route
 
 @router.get("/")
 def index():

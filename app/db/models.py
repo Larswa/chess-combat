@@ -10,6 +10,8 @@ class Player(Base):
     __tablename__ = 'players'
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True)
+    white_games = relationship('Game', foreign_keys='Game.white_id', back_populates='white')
+    black_games = relationship('Game', foreign_keys='Game.black_id', back_populates='black')
 
 class Game(Base):
     __tablename__ = 'games'
@@ -18,6 +20,8 @@ class Game(Base):
     black_id = Column(Integer, ForeignKey('players.id'))
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
     moves = relationship('Move', back_populates='game')
+    white = relationship('Player', foreign_keys=[white_id], back_populates='white_games')
+    black = relationship('Player', foreign_keys=[black_id], back_populates='black_games')
 
 class Move(Base):
     __tablename__ = 'moves'
