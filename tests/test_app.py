@@ -9,7 +9,7 @@ def test_root():
     client = TestClient(app)
     response = client.get("/")
     assert response.status_code == 200
-    assert "Chess Combat Service" in response.json().get("message", "")
+    assert "text/html" in response.headers.get("content-type", "")
 
 # Unit test: AI is mocked, no DB required
 @patch("app.main.get_openai_chess_move", return_value="e2e4")
