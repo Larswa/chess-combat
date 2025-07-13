@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: nexuscr.factus.dk/chess-combat
-  tag: "latest"
+  tag: "0.1.19"
   pullPolicy: IfNotPresent
 
 service:
