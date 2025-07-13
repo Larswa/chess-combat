@@ -16,7 +16,7 @@ class Game(Base):
     id = Column(Integer, primary_key=True)
     white_id = Column(Integer, ForeignKey('players.id'))
     black_id = Column(Integer, ForeignKey('players.id'))
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
     moves = relationship('Move', back_populates='game')
 
 class Move(Base):
@@ -24,5 +24,5 @@ class Move(Base):
     id = Column(Integer, primary_key=True)
     game_id = Column(Integer, ForeignKey('games.id'))
     move = Column(String)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
     game = relationship('Game', back_populates='moves')
