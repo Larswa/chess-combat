@@ -110,10 +110,16 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
     
     # AI move logic for both human-vs-ai and ai-vs-ai modes
     should_make_ai_move = False
-    if mode == 'human-vs-ai' and (not enforce_rules or not board.is_game_over()):
-        should_make_ai_move = True
-    elif mode == 'ai-vs-ai' and (not enforce_rules or not board.is_game_over()):
-        should_make_ai_move = True
+    if mode == 'human-vs-ai':
+        if enforce_rules:
+            should_make_ai_move = not board.is_game_over()
+        else:
+            should_make_ai_move = True  # Always make AI move when rules disabled
+    elif mode == 'ai-vs-ai':
+        if enforce_rules:
+            should_make_ai_move = not board.is_game_over()
+        else:
+            should_make_ai_move = True  # Always make AI move when rules disabled
     
     if should_make_ai_move:
         # Get move history for AI
@@ -132,6 +138,13 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
                     if legal_moves:
                         ai_move = random.choice([m.uci() for m in legal_moves])
                         board.push_uci(ai_move)
+            else:
+                # When rules are disabled, try to make the move but don't fail if invalid
+                try:
+                    board.push_uci(ai_move)
+                except:
+                    # If it fails, we'll still save it as a move
+                    pass
             
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
@@ -211,12 +224,80 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
                     if legal_moves:
                         ai_move = random.choice([m.uci() for m in legal_moves])
                         board.push_uci(ai_move)
+            else:
+                # When rules are disabled, try to make the move but don't fail if invalid
+                try:
+                    board.push_uci(ai_move)
+                except:
+                    # If it fails, we'll still save it as a move
+                    pass
             
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
     
     return {"fen": board.fen(), "moves": moves, "status": "no_move"}
+
+@router.get("/api/games")
+def api_get_all_games(db: Session = Depends(get_db)):
+    """
+    Get all games for history display
+    Returns: [{id, white_player, black_player, created_at, move_count, status}]
+    """
+    from sqlalchemy import func
+    games = db.query(Game).order_by(Game.created_at.desc()).limit(50).all()
+    
+    result = []
+    for game in games:
+        # Count moves
+        move_count = db.query(func.count(Move.id)).filter(Move.game_id == game.id).scalar()
+        
+        # Determine game status (simplified)
+        status = "Completed" if move_count > 0 else "In Progress"
+        
+        result.append({
+            "id": game.id,
+            "white_player": game.white.name if game.white else "Unknown",
+            "black_player": game.black.name if game.black else "Unknown", 
+            "created_at": game.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "move_count": move_count,
+            "status": status
+        })
+    
+    return {"games": result}
+
+@router.get("/api/game/{game_id}/moves")
+def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
+    """
+    Get all moves for a specific game
+    Returns: {game_info, moves: [{move_number, white_move, black_move}]}
+    """
+    game = get_game(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    moves = db.query(Move).filter(Move.game_id == game_id).order_by(Move.id).all()
+    
+    # Group moves by pairs (white, black)
+    move_pairs = []
+    for i in range(0, len(moves), 2):
+        white_move = moves[i].move if i < len(moves) else ""
+        black_move = moves[i + 1].move if i + 1 < len(moves) else ""
+        move_pairs.append({
+            "move_number": (i // 2) + 1,
+            "white_move": white_move,
+            "black_move": black_move
+        })
+    
+    return {
+        "game_info": {
+            "id": game.id,
+            "white_player": game.white.name if game.white else "Unknown",
+            "black_player": game.black.name if game.black else "Unknown",
+            "created_at": game.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        },
+        "moves": move_pairs
+    }
 
 def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True):
     """

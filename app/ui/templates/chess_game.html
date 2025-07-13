@@ -62,8 +62,19 @@
         </label>
         <button type="button" id="start-game-btn">Start New Game</button>
     </form>
-    <div id="board"></div>
-    <div id="move-history"></div>
+    <div style="display: flex; gap: 20px;">
+        <div style="flex: 1;">
+            <div id="board"></div>
+            <div id="move-history"></div>
+        </div>
+        <div style="flex: 1; max-width: 400px;">
+            <h3>Game History</h3>
+            <button type="button" id="load-history-btn" onclick="loadGameHistory()">Load Game History</button>
+            <div id="game-history" style="max-height: 400px; overflow-y: auto; margin-top: 10px;">
+                <p>Click "Load Game History" to view past games.</p>
+            </div>
+        </div>
+    </div>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="/static/js/chessboard.min.js"></script>
@@ -323,6 +334,93 @@
             createNewGame();
         });
         
+        // Game History Functions
+        async function loadGameHistory() {
+            try {
+                const response = await fetch('/api/games');
+                const data = await response.json();
+                
+                let html = '<div style="border: 1px solid #ccc; border-radius: 4px;">';
+                
+                if (data.games && data.games.length > 0) {
+                    for (const game of data.games) {
+                        html += `
+                            <div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;" 
+                                 onclick="viewGameMoves(${game.id})">
+                                <div style="font-weight: bold;">Game #${game.id}</div>
+                                <div style="font-size: 12px; color: #666;">
+                                    ${game.white_player} vs ${game.black_player}
+                                </div>
+                                <div style="font-size: 12px; color: #666;">
+                                    ${game.created_at} | ${game.move_count} moves
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    html += '<div style="padding: 20px; text-align: center; color: #666;">No games found</div>';
+                }
+                
+                html += '</div>';
+                document.getElementById('game-history').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading game history:', error);
+                document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game history</div>';
+            }
+        }
+
+        async function viewGameMoves(gameId) {
+            try {
+                const response = await fetch(`/api/game/${gameId}/moves`);
+                const data = await response.json();
+                
+                let html = `
+                    <div style="border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin-top: 10px;">
+                        <div style="font-weight: bold; margin-bottom: 10px;">
+                            Game #${data.game_info.id} - ${data.game_info.white_player} vs ${data.game_info.black_player}
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
+                            ${data.game_info.created_at}
+                        </div>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            <table style="width: 100%; font-size: 12px;">
+                                <thead>
+                                    <tr style="background-color: #f5f5f5;">
+                                        <th style="text-align: left; padding: 4px;">#</th>
+                                        <th style="text-align: left; padding: 4px;">White</th>
+                                        <th style="text-align: left; padding: 4px;">Black</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                for (const move of data.moves) {
+                    html += `
+                        <tr>
+                            <td style="padding: 2px 4px;">${move.move_number}</td>
+                            <td style="padding: 2px 4px;">${move.white_move}</td>
+                            <td style="padding: 2px 4px;">${move.black_move}</td>
+                        </tr>
+                    `;
+                }
+                
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" onclick="loadGameHistory()" style="margin-top: 10px; padding: 4px 8px; font-size: 12px;">
+                            Back to Game List
+                        </button>
+                    </div>
+                `;
+                
+                document.getElementById('game-history').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading game moves:', error);
+                document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game moves</div>';
+            }
+        }
+
         console.log('Event listeners attached');
         updateMoveHistory();
     });
