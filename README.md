@@ -22,6 +22,36 @@ pip install -r requirements.txt
 
 uvicorn app.main:app --reload
 
+## Logging
+
+The application now includes comprehensive logging to help you understand what's happening:
+
+### Log Levels
+- **INFO**: Basic application flow and important events
+- **DEBUG**: Detailed information for debugging (set DEBUG=true)
+- **WARNING**: Potential issues or fallbacks
+- **ERROR**: Error conditions
+
+### Enable Debug Logging
+Set the `DEBUG` environment variable to `true` for detailed logging:
+
+```bash
+# Linux/Mac
+export DEBUG=true
+uvicorn app.main:app --reload
+
+# PowerShell
+$ENV:DEBUG="true"
+uvicorn app.main:app --reload
+```
+
+### What Gets Logged
+- Database operations (connections, queries, table creation)
+- AI API calls and responses
+- HTTP requests and responses
+- Move validation and game logic
+- Error conditions and fallbacks
+
 
 For Powershell
 # 1. Create the venv
