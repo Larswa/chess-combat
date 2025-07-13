@@ -3,16 +3,16 @@ kind: Deployment
 metadata:
   name: {{ include "chess-combat.fullname" . }}
   labels:
-    app: {{ include "chess-combat.name" . }}
+    {{- include "chess-combat.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ include "chess-combat.name" . }}
+      {{- include "chess-combat.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app: {{ include "chess-combat.name" . }}
+        {{- include "chess-combat.selectorLabels" . | nindent 8 }}
     spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
@@ -28,17 +28,19 @@ spec:
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.env.OPENAI_API_KEY_SECRET }}
-                  key: api-key
+                  name: {{ .Values.secrets.openai.secretName }}
+                  key: {{ .Values.secrets.openai.keyName }}
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.env.GEMINI_API_KEY_SECRET }}
-                  key: api-key
+                  name: {{ .Values.secrets.gemini.secretName }}
+                  key: {{ .Values.secrets.gemini.keyName }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.env.POSTGRES_CONNECTION_SECRET }}
-                  key: connection
+                  name: {{ .Values.secrets.postgres.secretName }}
+                  key: {{ .Values.secrets.postgres.keyName }}
+            - name: DEBUG
+              value: {{ .Values.app.debug | quote }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

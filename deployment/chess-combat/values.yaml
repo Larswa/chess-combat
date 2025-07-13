@@ -1,5 +1,9 @@
 replicaCount: 1
 
+# Application configuration
+app:
+  debug: false  # Set to true to enable debug logging
+
 image:
   repository: nexuscr.factus.dk/chess-combat
   tag: "0.1.19"
@@ -39,7 +43,35 @@ securityContext:
   runAsNonRoot: true
   runAsUser: 1000
 
-env:
-  OPENAI_API_KEY_SECRET: openai-api-key
-  GEMINI_API_KEY_SECRET: gemini-api-key
-  POSTGRES_CONNECTION_SECRET: postgres-connection
+# Secrets configuration
+secrets:
+  # OpenAI API Key secret
+  openai:
+    create: true                    # Set to false if using external secret (e.g., from Flux)
+    secretName: openai-api-key      # Name of the secret (configurable for external secrets)
+    keyName: api-key                # Key name within the secret
+    apiKey: ""                      # Set this value when creating secret via Helm
+
+  # Gemini API Key secret
+  gemini:
+    create: true                    # Set to false if using external secret (e.g., from Flux)
+    secretName: gemini-api-key      # Name of the secret (configurable for external secrets)
+    keyName: api-key                # Key name within the secret
+    apiKey: ""                      # Set this value when creating secret via Helm
+
+  # PostgreSQL connection secret
+  postgres:
+    create: true                              # Set to false if using external secret (e.g., from Flux)
+    secretName: postgres-connection           # Name of the secret (configurable for external secrets)
+    keyName: connection                       # Key name within the secret
+    connectionUrl: ""                         # Set this value when creating secret via Helm (e.g., postgresql://user:password@host:5432/database)
+
+# Override the name of the chart
+nameOverride: ""
+# Override the full name of the release
+fullnameOverride: ""
+
+# Service account configuration (if needed in the future)
+serviceAccount:
+  create: false
+  name: ""

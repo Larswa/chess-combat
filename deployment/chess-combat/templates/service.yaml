@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: {{ include "chess-combat.fullname" . }}
   labels:
-    app: {{ include "chess-combat.name" . }}
+    {{- include "chess-combat.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -12,4 +12,4 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: {{ include "chess-combat.name" . }}
+    {{- include "chess-combat.selectorLabels" . | nindent 4 }}
