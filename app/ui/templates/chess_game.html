@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chess Combat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/static/css/chessboard.min.css" />
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; }
+        #board { width: 400px; margin-bottom: 1em; }
+        .controls { margin-bottom: 1em; }
+    </style>
+</head>
+<body>
+    <h1>Chess Combat</h1>
+    <form id="new-game-form" class="controls" action="javascript:void(0);" method="post">
+        <label>Game Mode:
+            <select id="game-mode" name="game_mode">
+                <option value="human-vs-ai">Human vs AI</option>
+                <option value="ai-vs-ai">AI vs AI</option>
+            </select>
+        </label>
+        <label id="color-label">Your Color:
+            <select id="player-color" name="player_color">
+                <option value="white">White</option>
+                <option value="black">Black</option>
+            </select>
+        </label>
+        <button type="button" id="start-game-btn">Start New Game</button>
+    </form>
+    <div id="board"></div>
+    <div id="move-history"></div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="/static/js/chessboard.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM Content Loaded - initializing chess game');
+        
+        let board = null;
+        let game = new Chess();
+        let gameId = null;
+        let gameMode = 'human-vs-ai';
+        let playerColor = 'white';
+
+        console.log('jQuery loaded:', typeof $ !== 'undefined');
+        console.log('Chess.js loaded:', typeof Chess !== 'undefined');
+        console.log('ChessBoard.js loaded:', typeof Chessboard !== 'undefined');
+
+        if (typeof $ === 'undefined') {
+            console.error('jQuery failed to load');
+            alert('jQuery library failed to load. Please refresh the page.');
+            return;
+        }
+
+        if (typeof Chess === 'undefined') {
+            console.error('Chess.js failed to load');
+            alert('Chess.js library failed to load. Please refresh the page.');
+            return;
+        }
+
+        if (typeof Chessboard === 'undefined') {
+            console.error('ChessBoard.js failed to load');
+            alert('ChessBoard.js library failed to load. Please refresh the page.');
+            return;
+        }
+
+        function updateMoveHistory() {
+            const history = game.history({ verbose: true });
+            let html = '<h3>Move History</h3><ol>';
+            for (const move of history) {
+                html += `<li>${move.color === 'w' ? 'White' : 'Black'}: ${move.san}</li>`;
+            }
+            html += '</ol>';
+            document.getElementById('move-history').innerHTML = html;
+        }
+
+        async function createNewGame() {
+            try {
+                const mode = document.getElementById('game-mode').value;
+                const color = document.getElementById('player-color').value;
+                
+                console.log('Creating new game with mode:', mode, 'color:', color);
+                
+                const res = await fetch('/api/new-game', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: mode, color: color })
+                });
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                
+                const data = await res.json();
+                console.log('Game created:', data);
+                
+                gameId = data.game_id;
+                gameMode = mode;
+                playerColor = color;
+                
+                game = new Chess(data.fen);
+                board.orientation(color);
+                board.position(data.fen);
+                updateMoveHistory();
+                
+                console.log('Game setup complete');
+            } catch (error) {
+                console.error('Error creating new game:', error);
+                alert('Failed to create new game: ' + error.message);
+            }
+        }
+
+        async function sendMoveToBackend(source, target) {
+            if (!gameId) return;
+            const move = source + target;
+            const res = await fetch('/api/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ game_id: gameId, move })
+            });
+            const data = await res.json();
+            if (data.status && data.status.startsWith('invalid')) {
+                // Invalid move, revert
+                return 'snapback';
+            }
+            game.load(data.fen);
+            board.position(data.fen);
+            updateMoveHistory();
+            // If AI moved, show it
+            if (data.ai_move) {
+                setTimeout(() => {
+                    game.load(data.fen);
+                    board.position(data.fen);
+                    updateMoveHistory();
+                }, 500);
+            }
+        }
+
+        function onDragStart (source, piece, position, orientation) {
+            if (gameMode === 'ai-vs-ai') return false;
+            if ((game.turn() === 'w' && playerColor !== 'white') || (game.turn() === 'b' && playerColor !== 'black')) return false;
+            if (game.game_over()) return false;
+        }
+
+        async function onDrop (source, target) {
+            // Only allow moves if game is active
+            if (!gameId) return 'snapback';
+            const move = game.move({ from: source, to: target, promotion: 'q' });
+            if (move === null) return 'snapback';
+            // Send move to backend
+            const result = await sendMoveToBackend(source, target);
+            if (result === 'snapback') {
+                game.undo();
+                return 'snapback';
+            }
+            // TODO: For human-vs-ai, fetch AI move and update board
+        }
+
+        function onSnapEnd () {
+            board.position(game.fen());
+        }
+
+        board = Chessboard('board', {
+            draggable: true,
+            position: 'start',
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd
+        });
+        
+        console.log('ChessBoard initialized:', board);
+
+        document.getElementById('game-mode').addEventListener('change', function() {
+            gameMode = this.value;
+            console.log('Game mode changed to:', gameMode);
+            document.getElementById('color-label').style.display = (gameMode === 'human-vs-ai') ? 'inline' : 'none';
+        });
+        document.getElementById('player-color').addEventListener('change', function() {
+            playerColor = this.value;
+            console.log('Player color changed to:', playerColor);
+        });
+        document.getElementById('start-game-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Start game button clicked');
+            createNewGame();
+        });
+        
+        console.log('Event listeners attached');
+        updateMoveHistory();
+    });
+    </script>
+</body>
+</html>

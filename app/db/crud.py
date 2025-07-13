@@ -4,11 +4,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://chess:chess@localhost:5432/chess")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./chess.db")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def create_player(db, name):
+    # Check if player already exists
+    existing_player = db.query(Player).filter(Player.name == name).first()
+    if existing_player:
+        return existing_player
+    
     player = Player(name=name)
     db.add(player)
     db.commit()

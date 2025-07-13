@@ -1,5 +1,6 @@
 # Entry point for the FastAPI app
 from fastapi import FastAPI, Depends, Body, Query, status, HTTPException
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from app.ui.routes import router as ui_router
 from app.db.crud import SessionLocal, get_game, create_player
@@ -28,16 +29,18 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown code (if any)
 
+
 app = FastAPI(lifespan=lifespan)
 app.include_router(ui_router)
 
+# Mount static files (for custom JS/CSS if needed)
+import os
+static_dir = os.path.join(os.path.dirname(__file__), "ui", "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 # Dependency for DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+from app.db.deps import get_db
 
 # Example endpoint using DB
 @app.get("/games/{game_id}")
