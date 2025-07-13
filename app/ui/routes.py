@@ -5,9 +5,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from app.db.crud import get_game, create_game, add_move, create_player
 from app.db.models import Game, Move
 from app.db.deps import get_db
+from app.ai.openai_ai import get_openai_chess_move
+from app.ai.gemini_ai import get_gemini_chess_move
 from sqlalchemy.orm import Session
 import os
 import chess
+import random
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
@@ -24,18 +27,20 @@ def chess_game(request: Request):
 @router.post("/api/new-game")
 def api_new_game(data: dict = Body(...), db: Session = Depends(get_db)):
     """
-    Create a new game. Expects: {mode: 'human-vs-ai'|'ai-vs-ai', color: 'white'|'black'}
+    Create a new game. Expects: {mode: 'human-vs-ai'|'ai-vs-ai', color: 'white'|'black', ai_engine: 'random'|'openai'|'gemini'}
     Returns: {game_id, fen, moves: []}
     """
     mode = data.get('mode')
     color = data.get('color')
+    ai_engine = data.get('ai_engine', 'random')
+    
     # For now, create two players (Human and AI) or two AIs
     if mode == 'human-vs-ai':
-        white_name = 'Human' if color == 'white' else 'AI'
-        black_name = 'AI' if color == 'white' else 'Human'
+        white_name = 'Human' if color == 'white' else f'AI_{ai_engine}'
+        black_name = f'AI_{ai_engine}' if color == 'white' else 'Human'
     else:
-        white_name = 'AI1'
-        black_name = 'AI2'
+        white_name = f'AI1_{ai_engine}'
+        black_name = f'AI2_{ai_engine}'
     # Ensure players exist
     white_player = create_player(db, white_name)
     black_player = create_player(db, black_name)
@@ -47,13 +52,14 @@ def api_new_game(data: dict = Body(...), db: Session = Depends(get_db)):
 @router.post("/api/move")
 def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
     """
-    Make a move. Expects: {game_id, move: 'e2e4', enforce_rules: true/false}
+    Make a move. Expects: {game_id, move: 'e2e4', enforce_rules: true/false, ai_engine: 'random'|'openai'|'gemini'}
     Returns: {fen, moves, status}
     """
     game_id = data.get('game_id')
     move_uci = data.get('move')
     enforce_rules = data.get('enforce_rules', True)  # Default to True
-
+    ai_engine = data.get('ai_engine', 'random')
+    
     game = get_game(db, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -97,33 +103,36 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
     # Use player names to determine mode (simple logic)
     mode = None
     if hasattr(game, 'white') and hasattr(game, 'black'):
-        if (game.white.name == 'Human' and game.black.name == 'AI') or (game.white.name == 'AI' and game.black.name == 'Human'):
+        if ('Human' in game.white.name and 'AI_' in game.black.name) or ('AI_' in game.white.name and 'Human' in game.black.name):
             mode = 'human-vs-ai'
+        elif ('AI1_' in game.white.name and 'AI2_' in game.black.name):
+            mode = 'ai-vs-ai'
+    
+    # AI move logic for both human-vs-ai and ai-vs-ai modes
+    should_make_ai_move = False
     if mode == 'human-vs-ai' and (not enforce_rules or not board.is_game_over()):
-        # AI move
-        import random
-        if enforce_rules:
-            # AI makes random legal move when rules are enforced
-            legal_moves = list(board.legal_moves)
-            if legal_moves:
-                ai_move = random.choice([m.uci() for m in legal_moves])
-                board.push_uci(ai_move)
-                add_move(db, game_id, ai_move)
-                moves.append(ai_move)
-                return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
-        else:
-            # AI makes any random move when rules are not enforced
-            # Generate a random move from any square to any square
-            squares = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
-                      'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
-                      'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
-                      'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
-                      'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
-                      'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
-                      'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
-                      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8']
-            ai_move = random.choice(squares) + random.choice(squares)
-            # Don't validate the move, just save it
+        should_make_ai_move = True
+    elif mode == 'ai-vs-ai' and (not enforce_rules or not board.is_game_over()):
+        should_make_ai_move = True
+    
+    if should_make_ai_move:
+        # Get move history for AI
+        move_history = [m.move for m in game.moves]
+        
+        # Get AI move using the selected engine
+        ai_move = get_ai_move(ai_engine, board, board.fen(), move_history, enforce_rules)
+        
+        if ai_move:
+            if enforce_rules:
+                try:
+                    board.push_uci(ai_move)
+                except:
+                    # If AI move is invalid, fallback to random legal move
+                    legal_moves = list(board.legal_moves)
+                    if legal_moves:
+                        ai_move = random.choice([m.uci() for m in legal_moves])
+                        board.push_uci(ai_move)
+            
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
@@ -151,3 +160,103 @@ def api_get_game(game_id: int, db: Session = Depends(get_db)):
 def submit_move(move: str):
     # Accept move from human player
     return {"status": "received", "move": move}
+
+@router.post("/api/ai-move")
+def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Make an AI move. Expects: {game_id, enforce_rules: true/false, ai_engine: 'random'|'openai'|'gemini'}
+    Returns: {fen, moves, status, ai_move}
+    """
+    game_id = data.get('game_id')
+    enforce_rules = data.get('enforce_rules', True)
+    ai_engine = data.get('ai_engine', 'random')
+    
+    game = get_game(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Rebuild board from moves
+    import chess
+    board = chess.Board()
+    moves = [m.move for m in game.moves]
+    for m in moves:
+        if enforce_rules:
+            board.push_uci(m)
+        else:
+            try:
+                board.push_uci(m)
+            except:
+                pass
+    
+    # Check game mode
+    mode = None
+    if hasattr(game, 'white') and hasattr(game, 'black'):
+        if ('AI1_' in game.white.name and 'AI2_' in game.black.name):
+            mode = 'ai-vs-ai'
+    
+    if mode == 'ai-vs-ai' and (not enforce_rules or not board.is_game_over()):
+        # Get move history for AI
+        move_history = [m.move for m in game.moves]
+        
+        # Get AI move using the selected engine
+        ai_move = get_ai_move(ai_engine, board, board.fen(), move_history, enforce_rules)
+        
+        if ai_move:
+            if enforce_rules:
+                try:
+                    board.push_uci(ai_move)
+                except:
+                    # If AI move is invalid, fallback to random legal move
+                    legal_moves = list(board.legal_moves)
+                    if legal_moves:
+                        ai_move = random.choice([m.uci() for m in legal_moves])
+                        board.push_uci(ai_move)
+            
+            add_move(db, game_id, ai_move)
+            moves.append(ai_move)
+            return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
+    
+    return {"fen": board.fen(), "moves": moves, "status": "no_move"}
+
+def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True):
+    """
+    Get AI move based on the selected engine
+    """
+    if ai_engine == 'openai':
+        try:
+            return get_openai_chess_move(board_fen, move_history)
+        except Exception as e:
+            print(f"OpenAI API error: {e}")
+            # Fallback to random move
+            ai_engine = 'random'
+    elif ai_engine == 'gemini':
+        try:
+            return get_gemini_chess_move(board_fen, move_history)
+        except Exception as e:
+            print(f"Gemini API error: {e}")
+            # Fallback to random move
+            ai_engine = 'random'
+    
+    # Random moves (fallback or selected)
+    if enforce_rules:
+        legal_moves = list(board.legal_moves)
+        if legal_moves:
+            return random.choice([m.uci() for m in legal_moves])
+    else:
+        # Generate random move when rules are disabled
+        squares = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
+                  'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
+                  'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
+                  'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
+                  'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
+                  'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
+                  'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
+                  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8']
+        from_square = random.choice(squares)
+        to_square = random.choice(squares)
+        # Ensure different squares
+        while to_square == from_square:
+            to_square = random.choice(squares)
+        return from_square + to_square
+    
+    return None

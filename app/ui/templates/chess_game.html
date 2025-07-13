@@ -12,7 +12,11 @@
         .controls label { 
             display: inline-block; 
             margin-right: 15px; 
-            margin-bottom: 10px; 
+            margin-bottom: 10px;
+            vertical-align: top;
+        }
+        .controls select {
+            margin-left: 5px;
         }
         .controls input[type="checkbox"] { 
             margin-right: 5px; 
@@ -46,6 +50,13 @@
                 <option value="black">Black</option>
             </select>
         </label>
+        <label id="ai-selection-label">AI Engine:
+            <select id="ai-engine" name="ai_engine">
+                <option value="random">Random Moves</option>
+                <option value="openai">ChatGPT (OpenAI)</option>
+                <option value="gemini">Gemini (Google)</option>
+            </select>
+        </label>
         <label>
             <input type="checkbox" id="enforce-rules" checked> Enforce Chess Rules
         </label>
@@ -66,6 +77,7 @@
         let gameMode = 'human-vs-ai';
         let playerColor = 'white';
         let enforceRules = true;
+        let aiEngine = 'random';
 
         console.log('jQuery loaded:', typeof $ !== 'undefined');
         console.log('Chess.js loaded:', typeof Chess !== 'undefined');
@@ -103,8 +115,9 @@
             try {
                 const mode = document.getElementById('game-mode').value;
                 const color = document.getElementById('player-color').value;
+                const engine = document.getElementById('ai-engine').value;
                 
-                console.log('Creating new game with mode:', mode, 'color:', color);
+                console.log('Creating new game with mode:', mode, 'color:', color, 'AI engine:', engine);
                 
                 const res = await fetch('/api/new-game', {
                     method: 'POST',
@@ -112,7 +125,8 @@
                     body: JSON.stringify({ 
                         mode: mode, 
                         color: color, 
-                        enforce_rules: enforceRules 
+                        enforce_rules: enforceRules,
+                        ai_engine: engine
                     })
                 });
                 
@@ -126,6 +140,7 @@
                 gameId = data.game_id;
                 gameMode = mode;
                 playerColor = color;
+                aiEngine = engine;
                 
                 game = new Chess(data.fen);
                 board.orientation(color);
@@ -133,9 +148,60 @@
                 updateMoveHistory();
                 
                 console.log('Game setup complete');
+                
+                // If it's AI vs AI mode, start the auto-play
+                if (gameMode === 'ai-vs-ai') {
+                    setTimeout(() => {
+                        makeAIMove();
+                    }, 1000); // Wait 1 second then start AI moves
+                }
             } catch (error) {
                 console.error('Error creating new game:', error);
                 alert('Failed to create new game: ' + error.message);
+            }
+        }
+
+        async function makeAIMove() {
+            if (!gameId || gameMode !== 'ai-vs-ai') return;
+            
+            try {
+                const res = await fetch('/api/ai-move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        game_id: gameId, 
+                        enforce_rules: enforceRules,
+                        ai_engine: aiEngine
+                    })
+                });
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                
+                const data = await res.json();
+                console.log('AI move response:', data);
+                
+                if (data.ai_move) {
+                    if (enforceRules) {
+                        game.load(data.fen);
+                    } else {
+                        try {
+                            game.load(data.fen);
+                        } catch (e) {
+                            console.log('Invalid FEN for AI move when rules disabled');
+                        }
+                    }
+                    board.position(data.fen);
+                    updateMoveHistory();
+                    
+                    // Continue the AI vs AI game with a delay
+                    setTimeout(() => {
+                        makeAIMove();
+                    }, 1500); // Wait 1.5 seconds between moves
+                }
+            } catch (error) {
+                console.error('Error making AI move:', error);
             }
         }
 
@@ -148,7 +214,8 @@
                 body: JSON.stringify({ 
                     game_id: gameId, 
                     move: move,
-                    enforce_rules: enforceRules 
+                    enforce_rules: enforceRules,
+                    ai_engine: aiEngine
                 })
             });
             const data = await res.json();
@@ -156,13 +223,34 @@
                 // Invalid move, revert
                 return 'snapback';
             }
-            game.load(data.fen);
+            
+            // Update the board position
+            if (enforceRules) {
+                game.load(data.fen);
+            } else {
+                // When rules are disabled, we can't rely on chess.js to validate the FEN
+                // So we'll just update the visual board without validating
+                try {
+                    game.load(data.fen);
+                } catch (e) {
+                    console.log('Invalid FEN when rules disabled, updating board anyway');
+                }
+            }
             board.position(data.fen);
             updateMoveHistory();
+            
             // If AI moved, show it
             if (data.ai_move) {
                 setTimeout(() => {
-                    game.load(data.fen);
+                    if (enforceRules) {
+                        game.load(data.fen);
+                    } else {
+                        try {
+                            game.load(data.fen);
+                        } catch (e) {
+                            console.log('Invalid FEN for AI move when rules disabled');
+                        }
+                    }
                     board.position(data.fen);
                     updateMoveHistory();
                 }, 500);
@@ -213,11 +301,17 @@
         document.getElementById('game-mode').addEventListener('change', function() {
             gameMode = this.value;
             console.log('Game mode changed to:', gameMode);
-            document.getElementById('color-label').style.display = (gameMode === 'human-vs-ai') ? 'inline' : 'none';
+            const isHumanVsAI = (gameMode === 'human-vs-ai');
+            document.getElementById('color-label').style.display = isHumanVsAI ? 'inline-block' : 'none';
+            document.getElementById('ai-selection-label').style.display = 'inline-block'; // Always show AI selection
         });
         document.getElementById('player-color').addEventListener('change', function() {
             playerColor = this.value;
             console.log('Player color changed to:', playerColor);
+        });
+        document.getElementById('ai-engine').addEventListener('change', function() {
+            aiEngine = this.value;
+            console.log('AI engine changed to:', aiEngine);
         });
         document.getElementById('enforce-rules').addEventListener('change', function() {
             enforceRules = this.checked;
