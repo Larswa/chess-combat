@@ -13,7 +13,21 @@ def create_player(db, name):
     existing_player = db.query(Player).filter(Player.name == name).first()
     if existing_player:
         return existing_player
-    
+
+    player = Player(name=name)
+    db.add(player)
+    db.commit()
+    db.refresh(player)
+    return player
+
+def create_player_strict(db, name):
+    """Create a player, raising IntegrityError if name already exists"""
+    # Check if player already exists
+    existing_player = db.query(Player).filter(Player.name == name).first()
+    if existing_player:
+        from sqlalchemy.exc import IntegrityError
+        raise IntegrityError("Player name already exists", None, None)
+
     player = Player(name=name)
     db.add(player)
     db.commit()

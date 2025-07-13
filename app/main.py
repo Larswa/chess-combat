@@ -53,7 +53,8 @@ def read_game(game_id: int, db: Session = Depends(get_db)):
 @app.post("/players/")
 def create_player_endpoint(player: PlayerCreate, db: Session = Depends(get_db)):
     try:
-        player_obj = create_player(db, player.name)
+        from app.db.crud import create_player_strict
+        player_obj = create_player_strict(db, player.name)
         return {"id": player_obj.id, "name": player_obj.name}
     except IntegrityError:
         db.rollback()

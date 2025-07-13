@@ -17,7 +17,7 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 
 @router.get("/", response_class=HTMLResponse)
 def chess_game(request: Request):
-    return templates.TemplateResponse("chess_game.html", {"request": request})
+    return templates.TemplateResponse(request, "chess_game.html")
 
 # --- API for UI ---
 
@@ -53,11 +53,11 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
     game_id = data.get('game_id')
     move_uci = data.get('move')
     enforce_rules = data.get('enforce_rules', True)  # Default to True
-    
+
     game = get_game(db, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    
+
     # Rebuild board from moves
     import chess
     board = chess.Board()
@@ -72,7 +72,7 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
             except:
                 # If the move is invalid, create a new board and set position manually
                 pass
-    
+
     # Try to make the move
     if enforce_rules:
         try:
@@ -86,7 +86,7 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
         except:
             # If it fails, we'll allow it anyway and save it
             pass
-    
+
     # Save move
     add_move(db, game_id, move_uci)
     moves.append(move_uci)
