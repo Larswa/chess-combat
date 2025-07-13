@@ -69,7 +69,7 @@
         </div>
         <div style="flex: 1; max-width: 400px;">
             <h3>Game History</h3>
-            <button type="button" id="load-history-btn" onclick="loadGameHistory()">Load Game History</button>
+            <button type="button" id="load-history-btn">Load Game History</button>
             <div id="game-history" style="max-height: 400px; overflow-y: auto; margin-top: 10px;">
                 <p>Click "Load Game History" to view past games.</p>
             </div>
@@ -333,6 +333,11 @@
             console.log('Start game button clicked');
             createNewGame();
         });
+        document.getElementById('load-history-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Load history button clicked');
+            loadGameHistory();
+        });
         
         // Game History Functions
         async function loadGameHistory() {
@@ -346,7 +351,7 @@
                     for (const game of data.games) {
                         html += `
                             <div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;" 
-                                 onclick="viewGameMoves(${game.id})">
+                                 data-game-id="${game.id}" class="game-item">
                                 <div style="font-weight: bold;">Game #${game.id}</div>
                                 <div style="font-size: 12px; color: #666;">
                                     ${game.white_player} vs ${game.black_player}
@@ -363,6 +368,14 @@
                 
                 html += '</div>';
                 document.getElementById('game-history').innerHTML = html;
+                
+                // Add event listeners for game items
+                document.querySelectorAll('.game-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        const gameId = this.getAttribute('data-game-id');
+                        viewGameMoves(gameId);
+                    });
+                });
             } catch (error) {
                 console.error('Error loading game history:', error);
                 document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game history</div>';
@@ -374,6 +387,17 @@
                 const response = await fetch(`/api/game/${gameId}/moves`);
                 const data = await response.json();
                 
+                console.log('Game moves data:', data);
+                
+                // Create a flat array of all moves for replay
+                const allMoves = [];
+                for (const moveSet of data.moves) {
+                    if (moveSet.white_move) allMoves.push(moveSet.white_move);
+                    if (moveSet.black_move) allMoves.push(moveSet.black_move);
+                }
+                
+                console.log('All moves for replay:', allMoves);
+                
                 let html = `
                     <div style="border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin-top: 10px;">
                         <div style="font-weight: bold; margin-bottom: 10px;">
@@ -382,6 +406,22 @@
                         <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
                             ${data.game_info.created_at}
                         </div>
+                        
+                        <!-- Replay Controls -->
+                        <div style="margin-bottom: 10px; padding: 10px; background-color: #f9f9f9; border-radius: 4px;">
+                            <div style="margin-bottom: 5px;">
+                                <button type="button" class="replay-start-btn" style="margin-right: 5px; padding: 4px 8px; font-size: 12px;">⏮ Start</button>
+                                <button type="button" class="replay-prev-btn" style="margin-right: 5px; padding: 4px 8px; font-size: 12px;">⏪ Prev</button>
+                                <button type="button" class="replay-next-btn" style="margin-right: 5px; padding: 4px 8px; font-size: 12px;">⏩ Next</button>
+                                <button type="button" class="replay-end-btn" style="margin-right: 5px; padding: 4px 8px; font-size: 12px;">⏭ End</button>
+                                <button type="button" class="replay-auto-btn" style="margin-right: 5px; padding: 4px 8px; font-size: 12px;">▶ Auto Play</button>
+                            </div>
+                            <div style="font-size: 12px;">
+                                Move: <span class="current-move-display">0</span> / ${allMoves.length}
+                                <span style="margin-left: 10px;">Current: <span class="current-move-text">Starting position</span></span>
+                            </div>
+                        </div>
+                        
                         <div style="max-height: 200px; overflow-y: auto;">
                             <table style="width: 100%; font-size: 12px;">
                                 <thead>
@@ -408,13 +448,126 @@
                                 </tbody>
                             </table>
                         </div>
-                        <button type="button" onclick="loadGameHistory()" style="margin-top: 10px; padding: 4px 8px; font-size: 12px;">
+                        <button type="button" class="back-to-list-btn" style="margin-top: 10px; padding: 4px 8px; font-size: 12px;">
                             Back to Game List
                         </button>
                     </div>
                 `;
                 
                 document.getElementById('game-history').innerHTML = html;
+                
+                // Setup replay functionality
+                let replayGame = new Chess();
+                let currentMoveIndex = 0;
+                let autoPlayInterval = null;
+                
+                function updateReplayBoard() {
+                    board.position(replayGame.fen());
+                    document.querySelector('.current-move-display').textContent = currentMoveIndex;
+                    
+                    if (currentMoveIndex === 0) {
+                        document.querySelector('.current-move-text').textContent = 'Starting position';
+                    } else {
+                        document.querySelector('.current-move-text').textContent = allMoves[currentMoveIndex - 1];
+                    }
+                }
+                
+                function goToMove(moveIndex) {
+                    // Reset to starting position
+                    replayGame = new Chess();
+                    
+                    // Play moves up to the target index
+                    for (let i = 0; i < moveIndex && i < allMoves.length; i++) {
+                        try {
+                            // Chess.js move() accepts UCI format directly
+                            const moveObj = {
+                                from: allMoves[i].substring(0, 2),
+                                to: allMoves[i].substring(2, 4),
+                                promotion: allMoves[i].length > 4 ? allMoves[i].substring(4) : undefined
+                            };
+                            
+                            let moveResult = replayGame.move(moveObj);
+                            if (!moveResult) {
+                                // Fallback: try the raw UCI string
+                                console.warn(`Move object failed for ${allMoves[i]}, trying raw string`);
+                                moveResult = replayGame.move(allMoves[i]);
+                            }
+                            if (!moveResult) {
+                                console.warn(`Could not parse move at index ${i}: ${allMoves[i]}`);
+                            } else {
+                                console.log(`Successfully played move ${i + 1}: ${allMoves[i]} -> ${moveResult.san}`);
+                            }
+                        } catch (e) {
+                            console.warn(`Invalid move at index ${i}: ${allMoves[i]}`, e);
+                        }
+                    }
+                    
+                    currentMoveIndex = moveIndex;
+                    updateReplayBoard();
+                    console.log(`Moved to position ${moveIndex}, FEN: ${replayGame.fen()}`);
+                }
+                
+                // Add event listeners for replay controls
+                document.querySelector('.replay-start-btn').addEventListener('click', function() {
+                    if (autoPlayInterval) clearInterval(autoPlayInterval);
+                    goToMove(0);
+                });
+                
+                document.querySelector('.replay-prev-btn').addEventListener('click', function() {
+                    if (autoPlayInterval) clearInterval(autoPlayInterval);
+                    if (currentMoveIndex > 0) {
+                        goToMove(currentMoveIndex - 1);
+                    }
+                });
+                
+                document.querySelector('.replay-next-btn').addEventListener('click', function() {
+                    if (autoPlayInterval) clearInterval(autoPlayInterval);
+                    if (currentMoveIndex < allMoves.length) {
+                        goToMove(currentMoveIndex + 1);
+                    }
+                });
+                
+                document.querySelector('.replay-end-btn').addEventListener('click', function() {
+                    if (autoPlayInterval) clearInterval(autoPlayInterval);
+                    goToMove(allMoves.length);
+                });
+                
+                document.querySelector('.replay-auto-btn').addEventListener('click', function() {
+                    if (autoPlayInterval) {
+                        clearInterval(autoPlayInterval);
+                        autoPlayInterval = null;
+                        this.textContent = '▶ Auto Play';
+                    } else {
+                        this.textContent = '⏸ Pause';
+                        autoPlayInterval = setInterval(() => {
+                            if (currentMoveIndex < allMoves.length) {
+                                goToMove(currentMoveIndex + 1);
+                            } else {
+                                clearInterval(autoPlayInterval);
+                                autoPlayInterval = null;
+                                this.textContent = '▶ Auto Play';
+                            }
+                        }, 1000); // 1 second per move
+                    }
+                });
+                
+                // Add event listener for back button
+                const backBtn = document.querySelector('.back-to-list-btn');
+                if (backBtn) {
+                    backBtn.addEventListener('click', function() {
+                        if (autoPlayInterval) clearInterval(autoPlayInterval);
+                        // Reset board to current game state
+                        if (gameId && game) {
+                            board.position(game.fen());
+                        } else {
+                            board.start();
+                        }
+                        loadGameHistory();
+                    });
+                }
+                
+                // Initialize replay at starting position
+                goToMove(0);
             } catch (error) {
                 console.error('Error loading game moves:', error);
                 document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game moves</div>';
