@@ -1,5 +1,37 @@
 # chess-combat
 
+## Logging and Debug Features
+
+The application includes comprehensive logging to help you monitor and debug chess game behavior. Logs are displayed on the console with detailed information about:
+
+- Application startup and shutdown
+- Database operations (player creation, game creation, moves)
+- AI API calls (OpenAI and Gemini)
+- Chess move validation and execution
+- HTTP endpoints and API calls
+
+### Enabling Debug Mode
+
+To see detailed debug logs, set the `DEBUG` environment variable:
+
+```bash
+# Linux/Mac
+export DEBUG=true
+uvicorn app.main:app --reload
+
+# Or inline
+DEBUG=true uvicorn app.main:app --reload
+```
+
+### Log Levels
+
+- **INFO**: General application flow, successful operations
+- **DEBUG**: Detailed information for debugging (requires DEBUG=true)
+- **WARNING**: Recoverable issues (invalid moves, fallback operations)
+- **ERROR**: Serious problems that need attention
+
+## Setup and Running
+
 
 
 To build this
