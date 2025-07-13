@@ -136,7 +136,7 @@ jobs:
 
       - name: Push Helm chart to Nexus
         env:
-          HELM_REPO_URL: https://nexus.factus.dk/repository/helm/chess-battle/
+          HELM_REPO_URL: https://nexus.factus.dk/repository/helm/
           HELM_USERNAME: ${{ secrets.NEXUS_USER }}
           HELM_PASSWORD: ${{ secrets.NEXUS_USER_PW }}
         run: |
@@ -146,8 +146,8 @@ jobs:
           echo "Looking for chart package: $CHART_PACKAGE"
           if [ -f "$CHART_PACKAGE" ]; then
             echo "Uploading $CHART_PACKAGE to Nexus"
-            curl -u $HELM_USERNAME:$HELM_PASSWORD --upload-file $CHART_PACKAGE $HELM_REPO_URL$(basename $CHART_PACKAGE)
-            echo "Successfully uploaded Helm chart version $VERSION"
+            curl -u $HELM_USERNAME:$HELM_PASSWORD --upload-file $CHART_PACKAGE ${HELM_REPO_URL}chess-combat-$VERSION.tgz
+            echo "Successfully uploaded Helm chart version $VERSION to ${HELM_REPO_URL}chess-combat-$VERSION.tgz"
           else
             echo "Chart package not found, listing available files:"
             ls -la ./deployment/chess-combat/
