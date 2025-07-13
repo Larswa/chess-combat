@@ -102,6 +102,34 @@ jobs:
         run: |
           helm plugin install https://github.com/chartmuseum/helm-push.git || echo "plugin already installed"
 
+      - name: Update Helm chart version and image tag
+        run: |
+          VERSION=${{ steps.get_version.outputs.version }}
+
+          # Update Chart.yaml with new version and appVersion
+          sed -i "s/^version:.*/version: $VERSION/" ./deployment/chess-combat/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" ./deployment/chess-combat/Chart.yaml
+
+          # Update values.yaml to use the specific image tag instead of latest
+          sed -i "s/tag: \"latest\"/tag: \"$VERSION\"/" ./deployment/chess-combat/values.yaml
+
+          echo "Updated Helm chart to version $VERSION"
+          echo "Chart.yaml:"
+          cat ./deployment/chess-combat/Chart.yaml
+          echo "Values.yaml image section:"
+          grep -A 3 "image:" ./deployment/chess-combat/values.yaml
+
+      - name: Commit updated Helm chart files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add ./deployment/chess-combat/Chart.yaml ./deployment/chess-combat/values.yaml
+          git commit -m "Update Helm chart to version ${{ steps.get_version.outputs.version }}" || echo "No chart changes to commit"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git push origin main
+
       - name: Package Helm chart
         run: |
           helm package ./deployment/chess-combat --destination ./deployment/chess-combat
@@ -112,5 +140,16 @@ jobs:
           HELM_USERNAME: ${{ secrets.NEXUS_USER }}
           HELM_PASSWORD: ${{ secrets.NEXUS_USER_PW }}
         run: |
-          CHART_PACKAGE=$(ls ./deployment/chess-combat/chess-combat-*.tgz | head -n1)
-          curl -u $HELM_USERNAME:$HELM_PASSWORD --upload-file $CHART_PACKAGE $HELM_REPO_URL$(basename $CHART_PACKAGE)
+          VERSION=${{ steps.get_version.outputs.version }}
+          CHART_PACKAGE="./deployment/chess-combat/chess-combat-$VERSION.tgz"
+
+          echo "Looking for chart package: $CHART_PACKAGE"
+          if [ -f "$CHART_PACKAGE" ]; then
+            echo "Uploading $CHART_PACKAGE to Nexus"
+            curl -u $HELM_USERNAME:$HELM_PASSWORD --upload-file $CHART_PACKAGE $HELM_REPO_URL$(basename $CHART_PACKAGE)
+            echo "Successfully uploaded Helm chart version $VERSION"
+          else
+            echo "Chart package not found, listing available files:"
+            ls -la ./deployment/chess-combat/
+            exit 1
+          fi
