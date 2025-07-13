@@ -49,3 +49,8 @@ $ENV:OPENAI_API_KEY=<openapikey>
 Start docker-desktop
 og start postgres container med
 docker start chess-postgres
+
+
+
+For at se ting i databasen
+winget install DBeaver.DBeaver.Community
