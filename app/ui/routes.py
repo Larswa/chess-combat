@@ -26,7 +26,7 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 def chess_game(request: Request):
     logger.info("Serving chess game UI")
     version_info = get_version_info()
-    return templates.TemplateResponse(request, "chess_game.html", {"version_info": version_info})
+    return templates.TemplateResponse("chess_game.html", {"request": request, "version_info": version_info})
 
 # Version endpoint
 @router.get("/api/version")
