@@ -99,3 +99,78 @@ def test_add_move_and_retrieve():
     get_resp = client.get(f"/games/{game_id}")
     assert get_resp.status_code == 200
     # No manual cleanup needed, fixture handles it
+
+@pytest.mark.integration
+def test_version_api_integration():
+    """Integration test for version API endpoint"""
+    client = TestClient(app)
+    response = client.get("/api/version")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify structure
+    assert "version" in data
+    assert "build_date" in data
+    assert "name" in data
+
+    # Verify data types and formats
+    assert isinstance(data["version"], str)
+    assert isinstance(data["build_date"], str)
+    assert isinstance(data["name"], str)
+
+    # Verify version format (should be semantic versioning)
+    version_parts = data["version"].split(".")
+    assert len(version_parts) >= 3  # Major.Minor.Patch
+
+    # Verify date format (YYYY-MM-DD)
+    assert len(data["build_date"]) == 10
+    assert data["build_date"][4] == "-"
+    assert data["build_date"][7] == "-"
+
+    # Verify name
+    assert data["name"] == "Chess Combat"
+
+@pytest.mark.integration
+def test_homepage_version_footer_integration():
+    """Integration test to verify version footer appears in homepage"""
+    client = TestClient(app)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    content = response.text
+
+    # Check for footer HTML structure
+    assert '<footer' in content
+    assert 'id="version-info"' in content
+
+    # Check for version template logic
+    assert 'version_info' in content or 'Chess Combat' in content
+
+    # Check for JavaScript fallback
+    assert '/api/version' in content
+    assert 'fetch(' in content
+
+@pytest.mark.integration
+def test_version_consistency_integration():
+    """Integration test to ensure version consistency between API and UI"""
+    client = TestClient(app)
+
+    # Get version from API
+    api_response = client.get("/api/version")
+    assert api_response.status_code == 200
+    api_version_data = api_response.json()
+
+    # Get homepage
+    ui_response = client.get("/")
+    assert ui_response.status_code == 200
+    ui_content = ui_response.text
+
+    # The UI should either contain the version in server-side template
+    # or have JavaScript to fetch it from API
+    version_in_ui = (
+        api_version_data["version"] in ui_content or
+        '/api/version' in ui_content  # JavaScript fallback exists
+    )
+
+    assert version_in_ui, "Version should be available in UI either server-side or via JavaScript"

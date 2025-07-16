@@ -58,7 +58,10 @@ jobs:
           python -c "from app.db.models import Base; from app.db.crud import engine; Base.metadata.create_all(bind=engine)"
 
       - name: Run all tests (unit + integration)
-        run: pytest
+        run: |
+          pytest tests/ -v
+          echo "Running version-specific tests..."
+          pytest tests/test_version.py -v
 
       - name: Get and bump version
         id: get_version
@@ -89,13 +92,20 @@ jobs:
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
           git push origin main --tags
 
+      - name: Set build date
+        id: build_date
+        run: |
+          BUILD_DATE=$(date -u +'%Y-%m-%d')
+          echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Build date set to: $BUILD_DATE"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           build-args: |
-            BUILD_DATE=$(date -u +'%Y-%m-%d')
+            BUILD_DATE=${{ steps.build_date.outputs.date }}
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }}
