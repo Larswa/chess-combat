@@ -112,8 +112,8 @@ jobs:
           sed -i "s/^version:.*/version: $VERSION/" ./deployment/chess-combat/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" ./deployment/chess-combat/Chart.yaml
 
-          # Update values.yaml to use the specific image tag instead of latest
-          sed -i "s/tag: \"latest\"/tag: \"$VERSION\"/" ./deployment/chess-combat/values.yaml
+          # Update values.yaml to use the specific image tag (replace any existing tag)
+          sed -i "s/tag: \".*\"/tag: \"$VERSION\"/" ./deployment/chess-combat/values.yaml
 
           echo "Updated Helm chart to version $VERSION"
           echo "Chart.yaml:"
