@@ -9,6 +9,12 @@ image:
   tag: "0.1.19"
   pullPolicy: IfNotPresent
 
+# Image pull secrets
+imagePullSecrets: []
+# Example:
+# imagePullSecrets:
+#   - name: nexus-registry-secret
+
 service:
   type: ClusterIP
   port: 80
