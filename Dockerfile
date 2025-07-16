@@ -16,6 +16,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy app code
 COPY app ./app
 
+# Copy VERSION.txt
+COPY VERSION.txt ./
+
+# Add build date (will be set during build)
+ARG BUILD_DATE
+ENV BUILD_DATE=${BUILD_DATE}
+
 # Expose port
 EXPOSE 8000
 

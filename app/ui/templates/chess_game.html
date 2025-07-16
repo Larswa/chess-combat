@@ -1,26 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Chess Combat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/static/css/chessboard.min.css" />
     <style>
-        body { font-family: Arial, sans-serif; margin: 2em; }
-        #board { width: 400px; margin-bottom: 1em; }
-        .controls { margin-bottom: 1em; }
-        .controls label { 
-            display: inline-block; 
-            margin-right: 15px; 
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2em;
+        }
+
+        #board {
+            width: 400px;
+            margin-bottom: 1em;
+        }
+
+        .controls {
+            margin-bottom: 1em;
+        }
+
+        .controls label {
+            display: inline-block;
+            margin-right: 15px;
             margin-bottom: 10px;
             vertical-align: top;
         }
+
         .controls select {
             margin-left: 5px;
         }
-        .controls input[type="checkbox"] { 
-            margin-right: 5px; 
+
+        .controls input[type="checkbox"] {
+            margin-right: 5px;
         }
+
         #start-game-btn {
             padding: 8px 16px;
             background-color: #007bff;
@@ -30,11 +45,13 @@
             cursor: pointer;
             font-size: 14px;
         }
+
         #start-game-btn:hover {
             background-color: #0056b3;
         }
     </style>
 </head>
+
 <body>
     <h1>Chess Combat</h1>
     <form id="new-game-form" class="controls" action="javascript:void(0);" method="post">
@@ -79,278 +96,278 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="/static/js/chessboard.min.js"></script>
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM Content Loaded - initializing chess game');
-        
-        let board = null;
-        let game = new Chess();
-        let gameId = null;
-        let gameMode = 'human-vs-ai';
-        let playerColor = 'white';
-        let enforceRules = true;
-        let aiEngine = 'random';
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('DOM Content Loaded - initializing chess game');
 
-        console.log('jQuery loaded:', typeof $ !== 'undefined');
-        console.log('Chess.js loaded:', typeof Chess !== 'undefined');
-        console.log('ChessBoard.js loaded:', typeof Chessboard !== 'undefined');
+            let board = null;
+            let game = new Chess();
+            let gameId = null;
+            let gameMode = 'human-vs-ai';
+            let playerColor = 'white';
+            let enforceRules = true;
+            let aiEngine = 'random';
 
-        if (typeof $ === 'undefined') {
-            console.error('jQuery failed to load');
-            alert('jQuery library failed to load. Please refresh the page.');
-            return;
-        }
+            console.log('jQuery loaded:', typeof $ !== 'undefined');
+            console.log('Chess.js loaded:', typeof Chess !== 'undefined');
+            console.log('ChessBoard.js loaded:', typeof Chessboard !== 'undefined');
 
-        if (typeof Chess === 'undefined') {
-            console.error('Chess.js failed to load');
-            alert('Chess.js library failed to load. Please refresh the page.');
-            return;
-        }
-
-        if (typeof Chessboard === 'undefined') {
-            console.error('ChessBoard.js failed to load');
-            alert('ChessBoard.js library failed to load. Please refresh the page.');
-            return;
-        }
-
-        function updateMoveHistory() {
-            const history = game.history({ verbose: true });
-            let html = '<h3>Move History</h3><ol>';
-            for (const move of history) {
-                html += `<li>${move.color === 'w' ? 'White' : 'Black'}: ${move.san}</li>`;
+            if (typeof $ === 'undefined') {
+                console.error('jQuery failed to load');
+                alert('jQuery library failed to load. Please refresh the page.');
+                return;
             }
-            html += '</ol>';
-            document.getElementById('move-history').innerHTML = html;
-        }
 
-        async function createNewGame() {
-            try {
-                const mode = document.getElementById('game-mode').value;
-                const color = document.getElementById('player-color').value;
-                const engine = document.getElementById('ai-engine').value;
-                
-                console.log('Creating new game with mode:', mode, 'color:', color, 'AI engine:', engine);
-                
-                const res = await fetch('/api/new-game', {
+            if (typeof Chess === 'undefined') {
+                console.error('Chess.js failed to load');
+                alert('Chess.js library failed to load. Please refresh the page.');
+                return;
+            }
+
+            if (typeof Chessboard === 'undefined') {
+                console.error('ChessBoard.js failed to load');
+                alert('ChessBoard.js library failed to load. Please refresh the page.');
+                return;
+            }
+
+            function updateMoveHistory() {
+                const history = game.history({ verbose: true });
+                let html = '<h3>Move History</h3><ol>';
+                for (const move of history) {
+                    html += `<li>${move.color === 'w' ? 'White' : 'Black'}: ${move.san}</li>`;
+                }
+                html += '</ol>';
+                document.getElementById('move-history').innerHTML = html;
+            }
+
+            async function createNewGame() {
+                try {
+                    const mode = document.getElementById('game-mode').value;
+                    const color = document.getElementById('player-color').value;
+                    const engine = document.getElementById('ai-engine').value;
+
+                    console.log('Creating new game with mode:', mode, 'color:', color, 'AI engine:', engine);
+
+                    const res = await fetch('/api/new-game', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            mode: mode,
+                            color: color,
+                            enforce_rules: enforceRules,
+                            ai_engine: engine
+                        })
+                    });
+
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+
+                    const data = await res.json();
+                    console.log('Game created:', data);
+
+                    gameId = data.game_id;
+                    gameMode = mode;
+                    playerColor = color;
+                    aiEngine = engine;
+
+                    game = new Chess(data.fen);
+                    board.orientation(color);
+                    board.position(data.fen);
+                    updateMoveHistory();
+
+                    console.log('Game setup complete');
+
+                    // If it's AI vs AI mode, start the auto-play
+                    if (gameMode === 'ai-vs-ai') {
+                        setTimeout(() => {
+                            makeAIMove();
+                        }, 1000); // Wait 1 second then start AI moves
+                    }
+                } catch (error) {
+                    console.error('Error creating new game:', error);
+                    alert('Failed to create new game: ' + error.message);
+                }
+            }
+
+            async function makeAIMove() {
+                if (!gameId || gameMode !== 'ai-vs-ai') return;
+
+                try {
+                    const res = await fetch('/api/ai-move', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            game_id: gameId,
+                            enforce_rules: enforceRules,
+                            ai_engine: aiEngine
+                        })
+                    });
+
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+
+                    const data = await res.json();
+                    console.log('AI move response:', data);
+
+                    if (data.ai_move) {
+                        if (enforceRules) {
+                            game.load(data.fen);
+                        } else {
+                            try {
+                                game.load(data.fen);
+                            } catch (e) {
+                                console.log('Invalid FEN for AI move when rules disabled');
+                            }
+                        }
+                        board.position(data.fen);
+                        updateMoveHistory();
+
+                        // Continue the AI vs AI game with a delay
+                        setTimeout(() => {
+                            makeAIMove();
+                        }, 1500); // Wait 1.5 seconds between moves
+                    }
+                } catch (error) {
+                    console.error('Error making AI move:', error);
+                }
+            }
+
+            async function sendMoveToBackend(source, target) {
+                if (!gameId) return;
+                const move = source + target;
+                const res = await fetch('/api/move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        mode: mode, 
-                        color: color, 
-                        enforce_rules: enforceRules,
-                        ai_engine: engine
-                    })
-                });
-                
-                if (!res.ok) {
-                    throw new Error(`HTTP error! status: ${res.status}`);
-                }
-                
-                const data = await res.json();
-                console.log('Game created:', data);
-                
-                gameId = data.game_id;
-                gameMode = mode;
-                playerColor = color;
-                aiEngine = engine;
-                
-                game = new Chess(data.fen);
-                board.orientation(color);
-                board.position(data.fen);
-                updateMoveHistory();
-                
-                console.log('Game setup complete');
-                
-                // If it's AI vs AI mode, start the auto-play
-                if (gameMode === 'ai-vs-ai') {
-                    setTimeout(() => {
-                        makeAIMove();
-                    }, 1000); // Wait 1 second then start AI moves
-                }
-            } catch (error) {
-                console.error('Error creating new game:', error);
-                alert('Failed to create new game: ' + error.message);
-            }
-        }
-
-        async function makeAIMove() {
-            if (!gameId || gameMode !== 'ai-vs-ai') return;
-            
-            try {
-                const res = await fetch('/api/ai-move', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        game_id: gameId, 
+                    body: JSON.stringify({
+                        game_id: gameId,
+                        move: move,
                         enforce_rules: enforceRules,
                         ai_engine: aiEngine
                     })
                 });
-                
-                if (!res.ok) {
-                    throw new Error(`HTTP error! status: ${res.status}`);
-                }
-                
                 const data = await res.json();
-                console.log('AI move response:', data);
-                
-                if (data.ai_move) {
-                    if (enforceRules) {
-                        game.load(data.fen);
-                    } else {
-                        try {
-                            game.load(data.fen);
-                        } catch (e) {
-                            console.log('Invalid FEN for AI move when rules disabled');
-                        }
-                    }
-                    board.position(data.fen);
-                    updateMoveHistory();
-                    
-                    // Continue the AI vs AI game with a delay
-                    setTimeout(() => {
-                        makeAIMove();
-                    }, 1500); // Wait 1.5 seconds between moves
+                if (data.status && data.status.startsWith('invalid')) {
+                    // Invalid move, revert
+                    return 'snapback';
                 }
-            } catch (error) {
-                console.error('Error making AI move:', error);
-            }
-        }
 
-        async function sendMoveToBackend(source, target) {
-            if (!gameId) return;
-            const move = source + target;
-            const res = await fetch('/api/move', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    game_id: gameId, 
-                    move: move,
-                    enforce_rules: enforceRules,
-                    ai_engine: aiEngine
-                })
-            });
-            const data = await res.json();
-            if (data.status && data.status.startsWith('invalid')) {
-                // Invalid move, revert
-                return 'snapback';
-            }
-            
-            // Update the board position
-            if (enforceRules) {
-                game.load(data.fen);
-            } else {
-                // When rules are disabled, we can't rely on chess.js to validate the FEN
-                // So we'll just update the visual board without validating
-                try {
-                    game.load(data.fen);
-                } catch (e) {
-                    console.log('Invalid FEN when rules disabled, updating board anyway');
-                }
-            }
-            board.position(data.fen);
-            updateMoveHistory();
-            
-            // If AI moved, show it
-            if (data.ai_move) {
-                setTimeout(() => {
-                    if (enforceRules) {
-                        game.load(data.fen);
-                    } else {
-                        try {
-                            game.load(data.fen);
-                        } catch (e) {
-                            console.log('Invalid FEN for AI move when rules disabled');
-                        }
-                    }
-                    board.position(data.fen);
-                    updateMoveHistory();
-                }, 500);
-            }
-        }
-
-        function onDragStart (source, piece, position, orientation) {
-            if (gameMode === 'ai-vs-ai') return false;
-            if ((game.turn() === 'w' && playerColor !== 'white') || (game.turn() === 'b' && playerColor !== 'black')) return false;
-            if (enforceRules && game.game_over()) return false;
-        }
-
-        async function onDrop (source, target) {
-            // Only allow moves if game is active
-            if (!gameId) return 'snapback';
-            
-            // If rules are enforced, validate the move with chess.js
-            if (enforceRules) {
-                const move = game.move({ from: source, to: target, promotion: 'q' });
-                if (move === null) return 'snapback';
-            }
-            
-            // Send move to backend
-            const result = await sendMoveToBackend(source, target);
-            if (result === 'snapback') {
+                // Update the board position
                 if (enforceRules) {
-                    game.undo();
+                    game.load(data.fen);
+                } else {
+                    // When rules are disabled, we can't rely on chess.js to validate the FEN
+                    // So we'll just update the visual board without validating
+                    try {
+                        game.load(data.fen);
+                    } catch (e) {
+                        console.log('Invalid FEN when rules disabled, updating board anyway');
+                    }
                 }
-                return 'snapback';
+                board.position(data.fen);
+                updateMoveHistory();
+
+                // If AI moved, show it
+                if (data.ai_move) {
+                    setTimeout(() => {
+                        if (enforceRules) {
+                            game.load(data.fen);
+                        } else {
+                            try {
+                                game.load(data.fen);
+                            } catch (e) {
+                                console.log('Invalid FEN for AI move when rules disabled');
+                            }
+                        }
+                        board.position(data.fen);
+                        updateMoveHistory();
+                    }, 500);
+                }
             }
-        }
 
-        function onSnapEnd () {
-            board.position(game.fen());
-        }
+            function onDragStart(source, piece, position, orientation) {
+                if (gameMode === 'ai-vs-ai') return false;
+                if ((game.turn() === 'w' && playerColor !== 'white') || (game.turn() === 'b' && playerColor !== 'black')) return false;
+                if (enforceRules && game.game_over()) return false;
+            }
 
-        board = Chessboard('board', {
-            draggable: true,
-            position: 'start',
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
-            onDragStart: onDragStart,
-            onDrop: onDrop,
-            onSnapEnd: onSnapEnd
-        });
-        
-        console.log('ChessBoard initialized:', board);
+            async function onDrop(source, target) {
+                // Only allow moves if game is active
+                if (!gameId) return 'snapback';
 
-        document.getElementById('game-mode').addEventListener('change', function() {
-            gameMode = this.value;
-            console.log('Game mode changed to:', gameMode);
-            const isHumanVsAI = (gameMode === 'human-vs-ai');
-            document.getElementById('color-label').style.display = isHumanVsAI ? 'inline-block' : 'none';
-            document.getElementById('ai-selection-label').style.display = 'inline-block'; // Always show AI selection
-        });
-        document.getElementById('player-color').addEventListener('change', function() {
-            playerColor = this.value;
-            console.log('Player color changed to:', playerColor);
-        });
-        document.getElementById('ai-engine').addEventListener('change', function() {
-            aiEngine = this.value;
-            console.log('AI engine changed to:', aiEngine);
-        });
-        document.getElementById('enforce-rules').addEventListener('change', function() {
-            enforceRules = this.checked;
-            console.log('Enforce rules changed to:', enforceRules);
-        });
-        document.getElementById('start-game-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            console.log('Start game button clicked');
-            createNewGame();
-        });
-        document.getElementById('load-history-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            console.log('Load history button clicked');
-            loadGameHistory();
-        });
-        
-        // Game History Functions
-        async function loadGameHistory() {
-            try {
-                const response = await fetch('/api/games');
-                const data = await response.json();
-                
-                let html = '<div style="border: 1px solid #ccc; border-radius: 4px;">';
-                
-                if (data.games && data.games.length > 0) {
-                    for (const game of data.games) {
-                        html += `
-                            <div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;" 
+                // If rules are enforced, validate the move with chess.js
+                if (enforceRules) {
+                    const move = game.move({ from: source, to: target, promotion: 'q' });
+                    if (move === null) return 'snapback';
+                }
+
+                // Send move to backend
+                const result = await sendMoveToBackend(source, target);
+                if (result === 'snapback') {
+                    if (enforceRules) {
+                        game.undo();
+                    }
+                    return 'snapback';
+                }
+            }
+
+            function onSnapEnd() {
+                board.position(game.fen());
+            }
+
+            board = Chessboard('board', {
+                draggable: true,
+                position: 'start',
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd
+            });
+
+            console.log('ChessBoard initialized:', board);
+
+            document.getElementById('game-mode').addEventListener('change', function () {
+                gameMode = this.value;
+                console.log('Game mode changed to:', gameMode);
+                const isHumanVsAI = (gameMode === 'human-vs-ai');
+                document.getElementById('color-label').style.display = isHumanVsAI ? 'inline-block' : 'none';
+                document.getElementById('ai-selection-label').style.display = 'inline-block'; // Always show AI selection
+            });
+            document.getElementById('player-color').addEventListener('change', function () {
+                playerColor = this.value;
+                console.log('Player color changed to:', playerColor);
+            });
+            document.getElementById('ai-engine').addEventListener('change', function () {
+                aiEngine = this.value;
+                console.log('AI engine changed to:', aiEngine);
+            });
+            document.getElementById('enforce-rules').addEventListener('change', function () {
+                enforceRules = this.checked;
+                console.log('Enforce rules changed to:', enforceRules);
+            });
+            document.getElementById('start-game-btn').addEventListener('click', function (e) {
+                e.preventDefault();
+                console.log('Start game button clicked');
+                createNewGame();
+            });
+            document.getElementById('load-history-btn').addEventListener('click', function (e) {
+                e.preventDefault();
+                console.log('Load history button clicked');
+                loadGameHistory();
+            });
+
+            // Game History Functions
+            async function loadGameHistory() {
+                try {
+                    const response = await fetch('/api/games');
+                    const data = await response.json();
+
+                    let html = '<div style="border: 1px solid #ccc; border-radius: 4px;">';
+
+                    if (data.games && data.games.length > 0) {
+                        for (const game of data.games) {
+                            html += `
+                            <div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;"
                                  data-game-id="${game.id}" class="game-item">
                                 <div style="font-weight: bold;">Game #${game.id}</div>
                                 <div style="font-size: 12px; color: #666;">
@@ -361,44 +378,44 @@
                                 </div>
                             </div>
                         `;
+                        }
+                    } else {
+                        html += '<div style="padding: 20px; text-align: center; color: #666;">No games found</div>';
                     }
-                } else {
-                    html += '<div style="padding: 20px; text-align: center; color: #666;">No games found</div>';
-                }
-                
-                html += '</div>';
-                document.getElementById('game-history').innerHTML = html;
-                
-                // Add event listeners for game items
-                document.querySelectorAll('.game-item').forEach(item => {
-                    item.addEventListener('click', function() {
-                        const gameId = this.getAttribute('data-game-id');
-                        viewGameMoves(gameId);
-                    });
-                });
-            } catch (error) {
-                console.error('Error loading game history:', error);
-                document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game history</div>';
-            }
-        }
 
-        async function viewGameMoves(gameId) {
-            try {
-                const response = await fetch(`/api/game/${gameId}/moves`);
-                const data = await response.json();
-                
-                console.log('Game moves data:', data);
-                
-                // Create a flat array of all moves for replay
-                const allMoves = [];
-                for (const moveSet of data.moves) {
-                    if (moveSet.white_move) allMoves.push(moveSet.white_move);
-                    if (moveSet.black_move) allMoves.push(moveSet.black_move);
+                    html += '</div>';
+                    document.getElementById('game-history').innerHTML = html;
+
+                    // Add event listeners for game items
+                    document.querySelectorAll('.game-item').forEach(item => {
+                        item.addEventListener('click', function () {
+                            const gameId = this.getAttribute('data-game-id');
+                            viewGameMoves(gameId);
+                        });
+                    });
+                } catch (error) {
+                    console.error('Error loading game history:', error);
+                    document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game history</div>';
                 }
-                
-                console.log('All moves for replay:', allMoves);
-                
-                let html = `
+            }
+
+            async function viewGameMoves(gameId) {
+                try {
+                    const response = await fetch(`/api/game/${gameId}/moves`);
+                    const data = await response.json();
+
+                    console.log('Game moves data:', data);
+
+                    // Create a flat array of all moves for replay
+                    const allMoves = [];
+                    for (const moveSet of data.moves) {
+                        if (moveSet.white_move) allMoves.push(moveSet.white_move);
+                        if (moveSet.black_move) allMoves.push(moveSet.black_move);
+                    }
+
+                    console.log('All moves for replay:', allMoves);
+
+                    let html = `
                     <div style="border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin-top: 10px;">
                         <div style="font-weight: bold; margin-bottom: 10px;">
                             Game #${data.game_info.id} - ${data.game_info.white_player} vs ${data.game_info.black_player}
@@ -406,7 +423,7 @@
                         <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
                             ${data.game_info.created_at}
                         </div>
-                        
+
                         <!-- Replay Controls -->
                         <div style="margin-bottom: 10px; padding: 10px; background-color: #f9f9f9; border-radius: 4px;">
                             <div style="margin-bottom: 5px;">
@@ -421,7 +438,7 @@
                                 <span style="margin-left: 10px;">Current: <span class="current-move-text">Starting position</span></span>
                             </div>
                         </div>
-                        
+
                         <div style="max-height: 200px; overflow-y: auto;">
                             <table style="width: 100%; font-size: 12px;">
                                 <thead>
@@ -433,18 +450,18 @@
                                 </thead>
                                 <tbody>
                 `;
-                
-                for (const move of data.moves) {
-                    html += `
+
+                    for (const move of data.moves) {
+                        html += `
                         <tr>
                             <td style="padding: 2px 4px;">${move.move_number}</td>
                             <td style="padding: 2px 4px;">${move.white_move}</td>
                             <td style="padding: 2px 4px;">${move.black_move}</td>
                         </tr>
                     `;
-                }
-                
-                html += `
+                    }
+
+                    html += `
                                 </tbody>
                             </table>
                         </div>
@@ -453,130 +470,156 @@
                         </button>
                     </div>
                 `;
-                
-                document.getElementById('game-history').innerHTML = html;
-                
-                // Setup replay functionality
-                let replayGame = new Chess();
-                let currentMoveIndex = 0;
-                let autoPlayInterval = null;
-                
-                function updateReplayBoard() {
-                    board.position(replayGame.fen());
-                    document.querySelector('.current-move-display').textContent = currentMoveIndex;
-                    
-                    if (currentMoveIndex === 0) {
-                        document.querySelector('.current-move-text').textContent = 'Starting position';
-                    } else {
-                        document.querySelector('.current-move-text').textContent = allMoves[currentMoveIndex - 1];
-                    }
-                }
-                
-                function goToMove(moveIndex) {
-                    // Reset to starting position
-                    replayGame = new Chess();
-                    
-                    // Play moves up to the target index
-                    for (let i = 0; i < moveIndex && i < allMoves.length; i++) {
-                        try {
-                            // Chess.js move() accepts UCI format directly
-                            const moveObj = {
-                                from: allMoves[i].substring(0, 2),
-                                to: allMoves[i].substring(2, 4),
-                                promotion: allMoves[i].length > 4 ? allMoves[i].substring(4) : undefined
-                            };
-                            
-                            let moveResult = replayGame.move(moveObj);
-                            if (!moveResult) {
-                                // Fallback: try the raw UCI string
-                                console.warn(`Move object failed for ${allMoves[i]}, trying raw string`);
-                                moveResult = replayGame.move(allMoves[i]);
-                            }
-                            if (!moveResult) {
-                                console.warn(`Could not parse move at index ${i}: ${allMoves[i]}`);
-                            } else {
-                                console.log(`Successfully played move ${i + 1}: ${allMoves[i]} -> ${moveResult.san}`);
-                            }
-                        } catch (e) {
-                            console.warn(`Invalid move at index ${i}: ${allMoves[i]}`, e);
-                        }
-                    }
-                    
-                    currentMoveIndex = moveIndex;
-                    updateReplayBoard();
-                    console.log(`Moved to position ${moveIndex}, FEN: ${replayGame.fen()}`);
-                }
-                
-                // Add event listeners for replay controls
-                document.querySelector('.replay-start-btn').addEventListener('click', function() {
-                    if (autoPlayInterval) clearInterval(autoPlayInterval);
-                    goToMove(0);
-                });
-                
-                document.querySelector('.replay-prev-btn').addEventListener('click', function() {
-                    if (autoPlayInterval) clearInterval(autoPlayInterval);
-                    if (currentMoveIndex > 0) {
-                        goToMove(currentMoveIndex - 1);
-                    }
-                });
-                
-                document.querySelector('.replay-next-btn').addEventListener('click', function() {
-                    if (autoPlayInterval) clearInterval(autoPlayInterval);
-                    if (currentMoveIndex < allMoves.length) {
-                        goToMove(currentMoveIndex + 1);
-                    }
-                });
-                
-                document.querySelector('.replay-end-btn').addEventListener('click', function() {
-                    if (autoPlayInterval) clearInterval(autoPlayInterval);
-                    goToMove(allMoves.length);
-                });
-                
-                document.querySelector('.replay-auto-btn').addEventListener('click', function() {
-                    if (autoPlayInterval) {
-                        clearInterval(autoPlayInterval);
-                        autoPlayInterval = null;
-                        this.textContent = '▶ Auto Play';
-                    } else {
-                        this.textContent = '⏸ Pause';
-                        autoPlayInterval = setInterval(() => {
-                            if (currentMoveIndex < allMoves.length) {
-                                goToMove(currentMoveIndex + 1);
-                            } else {
-                                clearInterval(autoPlayInterval);
-                                autoPlayInterval = null;
-                                this.textContent = '▶ Auto Play';
-                            }
-                        }, 1000); // 1 second per move
-                    }
-                });
-                
-                // Add event listener for back button
-                const backBtn = document.querySelector('.back-to-list-btn');
-                if (backBtn) {
-                    backBtn.addEventListener('click', function() {
-                        if (autoPlayInterval) clearInterval(autoPlayInterval);
-                        // Reset board to current game state
-                        if (gameId && game) {
-                            board.position(game.fen());
-                        } else {
-                            board.start();
-                        }
-                        loadGameHistory();
-                    });
-                }
-                
-                // Initialize replay at starting position
-                goToMove(0);
-            } catch (error) {
-                console.error('Error loading game moves:', error);
-                document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game moves</div>';
-            }
-        }
 
-        console.log('Event listeners attached');
-        updateMoveHistory();
-    });
+                    document.getElementById('game-history').innerHTML = html;
+
+                    // Setup replay functionality
+                    let replayGame = new Chess();
+                    let currentMoveIndex = 0;
+                    let autoPlayInterval = null;
+
+                    function updateReplayBoard() {
+                        board.position(replayGame.fen());
+                        document.querySelector('.current-move-display').textContent = currentMoveIndex;
+
+                        if (currentMoveIndex === 0) {
+                            document.querySelector('.current-move-text').textContent = 'Starting position';
+                        } else {
+                            document.querySelector('.current-move-text').textContent = allMoves[currentMoveIndex - 1];
+                        }
+                    }
+
+                    function goToMove(moveIndex) {
+                        // Reset to starting position
+                        replayGame = new Chess();
+
+                        // Play moves up to the target index
+                        for (let i = 0; i < moveIndex && i < allMoves.length; i++) {
+                            try {
+                                // Chess.js move() accepts UCI format directly
+                                const moveObj = {
+                                    from: allMoves[i].substring(0, 2),
+                                    to: allMoves[i].substring(2, 4),
+                                    promotion: allMoves[i].length > 4 ? allMoves[i].substring(4) : undefined
+                                };
+
+                                let moveResult = replayGame.move(moveObj);
+                                if (!moveResult) {
+                                    // Fallback: try the raw UCI string
+                                    console.warn(`Move object failed for ${allMoves[i]}, trying raw string`);
+                                    moveResult = replayGame.move(allMoves[i]);
+                                }
+                                if (!moveResult) {
+                                    console.warn(`Could not parse move at index ${i}: ${allMoves[i]}`);
+                                } else {
+                                    console.log(`Successfully played move ${i + 1}: ${allMoves[i]} -> ${moveResult.san}`);
+                                }
+                            } catch (e) {
+                                console.warn(`Invalid move at index ${i}: ${allMoves[i]}`, e);
+                            }
+                        }
+
+                        currentMoveIndex = moveIndex;
+                        updateReplayBoard();
+                        console.log(`Moved to position ${moveIndex}, FEN: ${replayGame.fen()}`);
+                    }
+
+                    // Add event listeners for replay controls
+                    document.querySelector('.replay-start-btn').addEventListener('click', function () {
+                        if (autoPlayInterval) clearInterval(autoPlayInterval);
+                        goToMove(0);
+                    });
+
+                    document.querySelector('.replay-prev-btn').addEventListener('click', function () {
+                        if (autoPlayInterval) clearInterval(autoPlayInterval);
+                        if (currentMoveIndex > 0) {
+                            goToMove(currentMoveIndex - 1);
+                        }
+                    });
+
+                    document.querySelector('.replay-next-btn').addEventListener('click', function () {
+                        if (autoPlayInterval) clearInterval(autoPlayInterval);
+                        if (currentMoveIndex < allMoves.length) {
+                            goToMove(currentMoveIndex + 1);
+                        }
+                    });
+
+                    document.querySelector('.replay-end-btn').addEventListener('click', function () {
+                        if (autoPlayInterval) clearInterval(autoPlayInterval);
+                        goToMove(allMoves.length);
+                    });
+
+                    document.querySelector('.replay-auto-btn').addEventListener('click', function () {
+                        if (autoPlayInterval) {
+                            clearInterval(autoPlayInterval);
+                            autoPlayInterval = null;
+                            this.textContent = '▶ Auto Play';
+                        } else {
+                            this.textContent = '⏸ Pause';
+                            autoPlayInterval = setInterval(() => {
+                                if (currentMoveIndex < allMoves.length) {
+                                    goToMove(currentMoveIndex + 1);
+                                } else {
+                                    clearInterval(autoPlayInterval);
+                                    autoPlayInterval = null;
+                                    this.textContent = '▶ Auto Play';
+                                }
+                            }, 1000); // 1 second per move
+                        }
+                    });
+
+                    // Add event listener for back button
+                    const backBtn = document.querySelector('.back-to-list-btn');
+                    if (backBtn) {
+                        backBtn.addEventListener('click', function () {
+                            if (autoPlayInterval) clearInterval(autoPlayInterval);
+                            // Reset board to current game state
+                            if (gameId && game) {
+                                board.position(game.fen());
+                            } else {
+                                board.start();
+                            }
+                            loadGameHistory();
+                        });
+                    }
+
+                    // Initialize replay at starting position
+                    goToMove(0);
+                } catch (error) {
+                    console.error('Error loading game moves:', error);
+                    document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game moves</div>';
+                }
+            }
+
+            console.log('Event listeners attached');
+            updateMoveHistory();
+
+            // Load version info if not available from template
+            const versionInfo = document.getElementById('version-info');
+            if (versionInfo && versionInfo.textContent.trim() === 'Chess Combat') {
+                fetch('/api/version')
+                    .then(response => response.json())
+                    .then(data => {
+                        versionInfo.textContent = `${data.name} v${data.version} (${data.build_date})`;
+                    })
+                    .catch(error => {
+                        console.log('Could not load version info:', error);
+                    });
+            }
+        });
     </script>
+
+    <!-- Version Footer -->
+    <footer
+        style="margin-top: 2em; padding: 1em 0; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 0.9em;">
+        <div id="version-info">
+            {% if version_info %}
+            {{ version_info.name }} v{{ version_info.version }} ({{ version_info.build_date }})
+            {% else %}
+            Chess Combat
+            {% endif %}
+        </div>
+    </footer>
 </body>
+
 </html>

@@ -7,6 +7,7 @@ from app.db.models import Game, Move
 from app.db.deps import get_db
 from app.ai.openai_ai import get_openai_chess_move
 from app.ai.gemini_ai import get_gemini_chess_move
+from app.version import get_version_info
 from sqlalchemy.orm import Session
 import os
 import chess
@@ -24,7 +25,14 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 @router.get("/", response_class=HTMLResponse)
 def chess_game(request: Request):
     logger.info("Serving chess game UI")
-    return templates.TemplateResponse(request, "chess_game.html")
+    version_info = get_version_info()
+    return templates.TemplateResponse(request, "chess_game.html", {"version_info": version_info})
+
+# Version endpoint
+@router.get("/api/version")
+def api_version():
+    """Get version information."""
+    return get_version_info()
 
 # --- API for UI ---
 
@@ -127,7 +135,7 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
             should_make_ai_move = not board.is_game_over()
         else:
             should_make_ai_move = True  # Always make AI move when rules disabled
-    
+
     if should_make_ai_move:
         # Get move history for AI
         move_history = [m.move for m in game.moves]
@@ -152,7 +160,7 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
                 except:
                     # If it fails, we'll still save it as a move
                     pass
-            
+
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
@@ -236,7 +244,7 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
                 except:
                     # If it fails, we'll still save it as a move
                     pass
-            
+
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
@@ -251,24 +259,24 @@ def api_get_all_games(db: Session = Depends(get_db)):
     """
     from sqlalchemy import func
     games = db.query(Game).order_by(Game.created_at.desc()).limit(50).all()
-    
+
     result = []
     for game in games:
         # Count moves
         move_count = db.query(func.count(Move.id)).filter(Move.game_id == game.id).scalar()
-        
+
         # Determine game status (simplified)
         status = "Completed" if move_count > 0 else "In Progress"
-        
+
         result.append({
             "id": game.id,
             "white_player": game.white.name if game.white else "Unknown",
-            "black_player": game.black.name if game.black else "Unknown", 
+            "black_player": game.black.name if game.black else "Unknown",
             "created_at": game.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "move_count": move_count,
             "status": status
         })
-    
+
     return {"games": result}
 
 @router.get("/api/game/{game_id}/moves")
@@ -280,9 +288,9 @@ def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
     game = get_game(db, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    
+
     moves = db.query(Move).filter(Move.game_id == game_id).order_by(Move.id).all()
-    
+
     # Group moves by pairs (white, black)
     move_pairs = []
     for i in range(0, len(moves), 2):
@@ -293,7 +301,7 @@ def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
             "white_move": white_move,
             "black_move": black_move
         })
-    
+
     return {
         "game_info": {
             "id": game.id,

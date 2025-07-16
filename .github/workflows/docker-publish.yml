@@ -94,6 +94,8 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            BUILD_DATE=$(date -u +'%Y-%m-%d')
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }}
