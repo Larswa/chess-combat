@@ -12,7 +12,7 @@ def get_gemini_chess_move(board_fen, move_history):
 
     # Read API key at runtime to allow for testing with mocked environments
     gemini_api_key = os.getenv("GEMINI_API_KEY")
-    
+
     if not gemini_api_key:
         logger.error("GEMINI_API_KEY environment variable not set")
         logger.warning("Falling back to default move 'e2e4'")
@@ -21,7 +21,7 @@ def get_gemini_chess_move(board_fen, move_history):
     # Improved prompt for better chess move generation with game context
     move_count = len(move_history)
     game_phase = "opening" if move_count < 20 else "middlegame" if move_count < 40 else "endgame"
-    
+
     # Format move history in a more readable way
     move_pairs = []
     for i in range(0, len(move_history), 2):
@@ -32,7 +32,7 @@ def get_gemini_chess_move(board_fen, move_history):
             move_pairs.append(f"{move_number}. {white_move} {black_move}")
         elif white_move:
             move_pairs.append(f"{move_number}. {white_move}")
-    
+
     move_history_text = " ".join(move_pairs) if move_pairs else "Starting position"
 
     prompt = f"""You are a professional chess engine. Analyze this chess position carefully and respond with ONLY the best move in UCI notation.
@@ -65,11 +65,11 @@ Move:"""
     ]
 
     headers = {"Content-Type": "application/json"}
-    
+
     for model in models_to_try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         params = {"key": gemini_api_key}
-        
+
         data = {
             "contents": [{
                 "parts": [{"text": prompt}]
