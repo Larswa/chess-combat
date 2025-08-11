@@ -97,6 +97,20 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
     # Try to make the move
     if enforce_rules:
         try:
+            # Check for pawn promotion - if a pawn is moving to the 8th or 1st rank without promotion suffix
+            if len(move_uci) == 4:
+                from_square = chess.parse_square(move_uci[:2])
+                to_square = chess.parse_square(move_uci[2:4])
+                piece = board.piece_at(from_square)
+
+                # Check if this is a pawn promotion
+                if piece and piece.piece_type == chess.PAWN:
+                    if (piece.color == chess.WHITE and chess.square_rank(to_square) == 7) or \
+                       (piece.color == chess.BLACK and chess.square_rank(to_square) == 0):
+                        # Auto-promote to queen
+                        move_uci += "q"
+                        logger.info(f"Auto-promoting pawn: {move_uci}")
+
             board.push_uci(move_uci)
         except Exception as e:
             return {"fen": board.fen(), "moves": moves, "status": f"invalid: {str(e)}"}
@@ -141,10 +155,25 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
         move_history = [m.move for m in game.moves]
 
         # Get AI move using the selected engine
-        ai_move = get_ai_move(ai_engine, board, board.fen(), move_history, enforce_rules)
+        ai_move = get_ai_move(ai_engine, board, board.fen(), move_history, enforce_rules, game_id)
 
         if ai_move:
+            logger.debug(f"AI suggested move: {ai_move}")
             if enforce_rules:
+                # Check for pawn promotion for AI moves too
+                if len(ai_move) == 4:
+                    from_square = chess.parse_square(ai_move[:2])
+                    to_square = chess.parse_square(ai_move[2:4])
+                    piece = board.piece_at(from_square)
+
+                    # Check if this is a pawn promotion
+                    if piece and piece.piece_type == chess.PAWN:
+                        if (piece.color == chess.WHITE and chess.square_rank(to_square) == 7) or \
+                           (piece.color == chess.BLACK and chess.square_rank(to_square) == 0):
+                            # Auto-promote to queen
+                            ai_move += "q"
+                            logger.info(f"Auto-promoting AI pawn: {ai_move}")
+
                 try:
                     board.push_uci(ai_move)
                 except:
@@ -164,6 +193,10 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
+        else:
+            logger.warning("AI did not return any move")
+    else:
+        logger.debug("AI move not needed or conditions not met")
     return {"fen": board.fen(), "moves": moves, "status": "ok"}
 
 @router.get("/api/game/{game_id}")
@@ -225,10 +258,24 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
         move_history = [m.move for m in game.moves]
 
         # Get AI move using the selected engine
-        ai_move = get_ai_move(ai_engine, board, board.fen(), move_history, enforce_rules)
+        ai_move = get_ai_move(ai_engine, board, board.fen(), move_history, enforce_rules, game_id)
 
         if ai_move:
             if enforce_rules:
+                # Check for pawn promotion for AI moves
+                if len(ai_move) == 4:
+                    from_square = chess.parse_square(ai_move[:2])
+                    to_square = chess.parse_square(ai_move[2:4])
+                    piece = board.piece_at(from_square)
+
+                    # Check if this is a pawn promotion
+                    if piece and piece.piece_type == chess.PAWN:
+                        if (piece.color == chess.WHITE and chess.square_rank(to_square) == 7) or \
+                           (piece.color == chess.BLACK and chess.square_rank(to_square) == 0):
+                            # Auto-promote to queen
+                            ai_move += "q"
+                            logger.info(f"Auto-promoting AI pawn in AI-vs-AI: {ai_move}")
+
                 try:
                     board.push_uci(ai_move)
                 except:
@@ -244,6 +291,12 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
                 except:
                     # If it fails, we'll still save it as a move
                     pass
+
+            add_move(db, game_id, ai_move)
+            moves.append(ai_move)
+            return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
+        else:
+            logger.warning("AI did not return any move in AI-vs-AI")
 
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
@@ -312,22 +365,53 @@ def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
         "moves": move_pairs
     }
 
-def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True):
+def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True, game_id=None):
     """
-    Get AI move based on the selected engine
+    Get AI move based on the selected engine, with optional session support
     """
+    logger.debug(f"Getting AI move with engine: {ai_engine}, enforce_rules: {enforce_rules}")
+
+    # Create session ID for strategic continuity
+    session_id = None
+    if game_id:
+        # Determine which color is to move based on move count
+        move_count = len(move_history)
+        current_player_color = "white" if move_count % 2 == 0 else "black"
+        session_id = f"game_{game_id}_{current_player_color}_{ai_engine}"
+
+        # Create session if it doesn't exist
+        try:
+            from app.ai.ai_session_manager import session_manager
+            existing_session = session_manager.get_session(session_id)
+            if not existing_session:
+                session_manager.create_session(session_id, ai_engine, current_player_color)
+                logger.info(f"Created AI session: {session_id}")
+        except Exception as e:
+            logger.warning(f"Could not create AI session: {e}")
+            session_id = None
+
     if ai_engine == 'openai':
         try:
-            return get_openai_chess_move(board_fen, move_history)
+            move = get_openai_chess_move(board_fen, move_history, session_id)
+            if move:
+                logger.info(f"OpenAI returned move: {move}")
+                return move
+            else:
+                logger.warning("OpenAI returned no move")
         except Exception as e:
-            print(f"OpenAI API error: {e}")
+            logger.error(f"OpenAI API error: {e}")
             # Fallback to random move
             ai_engine = 'random'
     elif ai_engine == 'gemini':
         try:
-            return get_gemini_chess_move(board_fen, move_history)
+            move = get_gemini_chess_move(board_fen, move_history, session_id)
+            if move:
+                logger.info(f"Gemini returned move: {move}")
+                return move
+            else:
+                logger.warning("Gemini returned no move")
         except Exception as e:
-            print(f"Gemini API error: {e}")
+            logger.error(f"Gemini API error: {e}")
             # Fallback to random move
             ai_engine = 'random'
 
@@ -335,7 +419,12 @@ def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True):
     if enforce_rules:
         legal_moves = list(board.legal_moves)
         if legal_moves:
-            return random.choice([m.uci() for m in legal_moves])
+            random_move = random.choice([m.uci() for m in legal_moves])
+            logger.info(f"Using random legal move: {random_move}")
+            return random_move
+        else:
+            logger.error("No legal moves available!")
+            return None
     else:
         # Generate random move when rules are disabled
         squares = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
@@ -351,6 +440,9 @@ def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True):
         # Ensure different squares
         while to_square == from_square:
             to_square = random.choice(squares)
-        return from_square + to_square
+        random_move = from_square + to_square
+        logger.info(f"Using random move (rules disabled): {random_move}")
+        return random_move
 
+    logger.error("Failed to generate any move")
     return None
