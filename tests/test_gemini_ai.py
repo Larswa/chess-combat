@@ -68,3 +68,17 @@ class TestGeminiAI:
             move = get_gemini_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
             assert move == "d2d4"
             assert mock_requests.post.called
+    
+    def test_gemini_with_move_history(self):
+        """Test Gemini AI with a realistic move history"""
+        from app.ai.gemini_ai import get_gemini_chess_move
+        
+        # Test with some opening moves
+        move_history = ["e2e4", "e7e5", "g1f3", "b8c6"]
+        board_fen = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+        
+        # Mock environment without API key to get fallback
+        with patch.dict(os.environ, {}, clear=True):
+            move = get_gemini_chess_move(board_fen, move_history)
+            # Should still return fallback move even with complex position
+            assert move == "e2e4", "Should return fallback move when no API key, regardless of position"

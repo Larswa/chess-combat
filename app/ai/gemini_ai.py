@@ -18,16 +18,41 @@ def get_gemini_chess_move(board_fen, move_history):
         logger.warning("Falling back to default move 'e2e4'")
         return "e2e4"
 
-    # Improved prompt for better chess move generation
-    prompt = f"""You are a professional chess engine. Analyze this chess position and respond with ONLY the best move in UCI notation.
+    # Improved prompt for better chess move generation with game context
+    move_count = len(move_history)
+    game_phase = "opening" if move_count < 20 else "middlegame" if move_count < 40 else "endgame"
+    
+    # Format move history in a more readable way
+    move_pairs = []
+    for i in range(0, len(move_history), 2):
+        white_move = move_history[i] if i < len(move_history) else ""
+        black_move = move_history[i + 1] if i + 1 < len(move_history) else ""
+        move_number = (i // 2) + 1
+        if black_move:
+            move_pairs.append(f"{move_number}. {white_move} {black_move}")
+        elif white_move:
+            move_pairs.append(f"{move_number}. {white_move}")
+    
+    move_history_text = " ".join(move_pairs) if move_pairs else "Starting position"
 
-Current board position (FEN): {board_fen}
-Previous moves: {move_history}
+    prompt = f"""You are a professional chess engine. Analyze this chess position carefully and respond with ONLY the best move in UCI notation.
 
-Requirements:
-- Return ONLY the move in UCI format (examples: e2e4, g1f3, o-o, e7e8q)
+POSITION ANALYSIS:
+- Current board position (FEN): {board_fen}
+- Game phase: {game_phase}
+- Move history: {move_history_text}
+- Total moves played: {move_count}
+
+CHESS STRATEGY GUIDELINES:
+- Opening (moves 1-20): Develop pieces, control center, castle for safety
+- Middlegame (moves 21-40): Look for tactics, improve piece coordination, attack weaknesses
+- Endgame (40+ moves): Activate king, push passed pawns, simplify when ahead
+
+REQUIREMENTS:
+- Return ONLY the move in UCI format (examples: e2e4, g1f3, e1g1, e7e8q)
 - No explanations, no additional text
-- Choose a legal, strategic move
+- Choose a strong, strategic move that considers the current game phase
+- Look for tactical opportunities (pins, forks, skewers)
 
 Move:"""
 
