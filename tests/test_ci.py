@@ -104,7 +104,7 @@ def test_ci_checkmate_detection(ci_client):
         }
         response = ci_client.post("/api/move", json=move_data)
         assert response.status_code == 200
-        
+
         move_result = response.json()
         print(f"Move {i+1}: {move} -> FEN: {move_result.get('fen', 'N/A')}")
         print(f"Move {i+1}: Status: {move_result.get('status', 'N/A')}")
@@ -118,7 +118,7 @@ def test_ci_checkmate_detection(ci_client):
         board = chess.Board(final_fen)
         print(f"Board from final FEN is_game_over: {board.is_game_over()}")
         print(f"Board from final FEN is_checkmate: {board.is_checkmate()}")
-        
+
         # This should be True if our move sequence worked
         assert board.is_game_over(), f"Game should be over after fool's mate, but board state is: {final_fen}"
         assert board.is_checkmate(), f"Should be checkmate after fool's mate, but board state is: {final_fen}"
