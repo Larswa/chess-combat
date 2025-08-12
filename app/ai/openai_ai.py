@@ -14,13 +14,25 @@ def parse_structured_move_response(response: str, valid_moves: List[str]) -> str
 
     logger.debug(f"Parsing response: '{response}' with valid moves: {valid_moves}")
 
-    # Strategy 1: Parse structured format "MOVE: e2e4"
+    # Strategy 1: Parse structured format "MOVE: e2e4" or "MOVE: Ng8f6"
     move_match = re.search(r'MOVE:\s*([a-h][1-8][a-h][1-8][qrbn]?)', response, re.IGNORECASE)
     if move_match:
         move = move_match.group(1).lower()
         logger.debug(f"Found structured move: {move}")
         if move in valid_moves:
             return move
+
+    # Strategy 1b: Handle algebraic notation like "MOVE: Ng8f6"
+    algebraic_match = re.search(r'MOVE:\s*([NBRQK]?[a-h]?[1-8]?x?[a-h][1-8][qrbn]?[+#]?)', response, re.IGNORECASE)
+    if algebraic_match:
+        algebraic_move = algebraic_match.group(1)
+        logger.debug(f"Found algebraic move: {algebraic_move}")
+        # Try to match it to a valid UCI move by removing piece notation
+        cleaned = re.sub(r'^[NBRQK]', '', algebraic_move, flags=re.IGNORECASE).lower()
+        cleaned = re.sub(r'[x+#]', '', cleaned)
+        if cleaned in valid_moves:
+            logger.debug(f"Converted algebraic {algebraic_move} to UCI {cleaned}")
+            return cleaned
 
     # Strategy 2: Look for any UCI pattern in the response
     uci_pattern = r'\b([a-h][1-8][a-h][1-8][qrbn]?)\b'
@@ -56,11 +68,8 @@ def get_openai_chess_move(board_fen: str, move_history: List[str] = None, sessio
         try:
             from .ai_session_manager import session_manager
 
-            # Get smart suggestions for the session manager
-            smart_suggestions = get_smart_move_suggestions(board_fen, num_suggestions=5)
-
-            # Use session-based strategic move
-            move = session_manager.get_strategic_move(session_id, board_fen, move_history or [], smart_suggestions)
+            # Use session-based strategic move (without limiting to chess helper suggestions)
+            move = session_manager.get_strategic_move(session_id, board_fen, move_history or [], [])
             if move:
                 logger.info(f"OpenAI session {session_id} returned strategic move: {move}")
                 return move
@@ -95,16 +104,44 @@ def get_openai_chess_move(board_fen: str, move_history: List[str] = None, sessio
 
     move_history_text = " ".join(move_pairs) if move_pairs else "Starting position"
 
-    # Get smart move suggestions to guide the AI
-    smart_suggestions = get_smart_move_suggestions(board_fen, num_suggestions=3)
-    position_desc = get_position_description(board_fen)
-    
-    # Get all legal moves for parsing validation
+    # Get all legal moves for the AI to choose from
     import chess
     board = chess.Board(board_fen)
     all_legal_moves = [move.uci() for move in board.legal_moves]
 
-    system_prompt = """You are a professional chess engine. Choose the best move from the suggested legal moves.
+    # Get critical position analysis including threats and safety
+    from .chess_helper import analyze_threats_and_opportunities, get_position_description
+    
+    position_analysis = analyze_threats_and_opportunities(board_fen)
+    position_description = get_position_description(board_fen)
+    
+    # Analyze which pieces are under attack
+    attacked_pieces = []
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece and piece.color == board.turn:
+            if board.is_attacked_by(not board.turn, square):
+                piece_name = piece.symbol().upper()
+                square_name = chess.square_name(square)
+                attacked_pieces.append(f"{piece_name} on {square_name}")
+
+    # Check which squares are dangerous (under enemy attack)
+    dangerous_squares = []
+    for square in chess.SQUARES:
+        if board.is_attacked_by(not board.turn, square):
+            dangerous_squares.append(chess.square_name(square))
+
+    threats_text = ""
+    if position_analysis["threats"]:
+        threats_text += f"\n⚠️ THREATS: {'; '.join(position_analysis['threats'])}"
+    if attacked_pieces:
+        threats_text += f"\n⚠️ YOUR PIECES UNDER ATTACK: {', '.join(attacked_pieces)}"
+    if dangerous_squares:
+        threats_text += f"\n⚠️ DANGEROUS SQUARES (enemy controls): {', '.join(dangerous_squares[:10])}{'...' if len(dangerous_squares) > 10 else ''}"
+    if position_analysis["opportunities"]:
+        threats_text += f"\n✅ OPPORTUNITIES: {'; '.join(position_analysis['opportunities'])}"
+
+    system_prompt = """You are a world-class chess grandmaster AI. You have deep understanding of chess strategy, tactics, and opening principles.
 
 CRITICAL: You are receiving chess positions in FEN (Forsyth-Edwards Notation) format.
 FEN FORMAT EXPLANATION:
@@ -118,38 +155,62 @@ PIECE NOTATION IN FEN:
 - Numbers 1-8 = Number of empty squares
 - "/" = Separates ranks (rows) from 8th rank to 1st rank
 
-IMPORTANT INSTRUCTIONS:
-1. You will be given a list of LEGAL moves that are already validated
-2. Choose the BEST move from this list based on chess principles
-3. Respond EXACTLY in the format: "MOVE: [uci_move]" followed by "REASON: [explanation]"
-4. Do NOT suggest moves outside the provided list
-5. UCI format examples: e2e4, g1f3, e7e8q (for pawn promotion)
+CHESS PRINCIPLES TO FOLLOW:
+OPENING (moves 1-15):
+- Control the center (e4, d4, e5, d5)
+- Develop knights before bishops
+- Castle early for king safety
+- Don't move the same piece twice unless necessary
+- Don't bring queen out too early
+- AVOID premature pawn storms on the wings (like a2a4, b2b4, g2g4, h2h4)
 
-Chess principles to consider:
-- Captures (especially of valuable pieces)
-- Checks and threats
-- Piece development in opening
-- Center control
-- King safety"""
+MIDDLEGAME:
+- Improve piece coordination
+- Create threats and tactics
+- Consider pawn breaks
+- Maintain king safety
 
-    user_prompt = f"""CURRENT POSITION:
-{position_desc}
-
-LEGAL MOVE OPTIONS (choose the best one):
-{', '.join(smart_suggestions) if smart_suggestions else 'No suggestions available'}
-
-Game context: {game_phase} phase
-Move history: {move_history_text}
+ENDGAME:
+- Activate your king
+- Push passed pawns
+- Use your pieces efficiently
 
 RESPONSE FORMAT - You MUST respond in this exact format:
 MOVE: [uci_move]
 REASON: [brief_reason]
 
 Example:
-MOVE: e2e4
-REASON: Controls center and develops pieces
+MOVE: g1f3
+REASON: Develops knight and controls central squares"""
 
-Choose the BEST move from the legal options above:"""
+    user_prompt = f"""CURRENT POSITION (FEN): {board_fen}
+POSITION: {position_description}
+
+🛡️ CRITICAL SAFETY ANALYSIS:{threats_text}
+
+LEGAL MOVE OPTIONS (UCI format):
+{', '.join(all_legal_moves[:20])}{'...' if len(all_legal_moves) > 20 else ''}
+
+Game context: {game_phase} phase (move {move_count})
+Move history: {move_history_text}
+
+⚠️ CRITICAL INSTRUCTIONS:
+1. DO NOT move pieces to dangerous squares (under enemy attack) unless capturing a more valuable piece
+2. SAVE pieces that are under attack - move them to safety or defend them
+3. AVOID moving valuable pieces (Queen, Rook) into danger
+4. Look for tactical opportunities but prioritize piece safety
+
+Analyze the position and choose the BEST move from the legal options. Consider:
+1. PIECE SAFETY (priority #1)
+2. Material balance
+3. King safety
+4. Piece activity
+5. Control of center
+6. Tactical opportunities
+
+RESPONSE FORMAT:
+MOVE: [uci_move]
+REASON: [brief_reason]"""
 
     try:
         logger.debug("Sending request to OpenAI API")
@@ -169,7 +230,7 @@ Choose the BEST move from the legal options above:"""
         proposed_move = parse_structured_move_response(ai_response, all_legal_moves)
 
         if proposed_move:
-            # Use chess helper to validate and suggest similar move if needed
+            # Validate the move is actually legal
             validated_move = validate_and_suggest_similar_move(proposed_move, board_fen)
             if validated_move:
                 logger.info(f"OpenAI suggested move: {validated_move}")
@@ -177,22 +238,24 @@ Choose the BEST move from the legal options above:"""
             else:
                 logger.warning(f"OpenAI move {proposed_move} could not be validated")
 
-        # If no valid move found, fall back to smart suggestions
+        # If no valid move found, use a simple fallback
         logger.warning(f"OpenAI returned unparseable response: {ai_response}")
-        fallback_suggestions = get_smart_move_suggestions(board_fen, num_suggestions=1)
-        if fallback_suggestions:
-            logger.info(f"Using smart fallback move: {fallback_suggestions[0]}")
-            return fallback_suggestions[0]
+        if all_legal_moves:
+            # Just return the first legal move as emergency fallback
+            logger.info(f"Using emergency fallback move: {all_legal_moves[0]}")
+            return all_legal_moves[0]
 
         # Ultimate fallback
-        logger.error("No valid moves found, using default")
+        logger.error("No legal moves found, using default")
         return "e2e4"
 
     except Exception as e:
         logger.error(f"Error calling OpenAI API: {str(e)}")
-        # Use chess helper for emergency fallback
-        emergency_suggestions = get_smart_move_suggestions(board_fen, num_suggestions=1)
-        if emergency_suggestions:
-            logger.info(f"Emergency fallback move: {emergency_suggestions[0]}")
-            return emergency_suggestions[0]
+        # Use simple emergency fallback
+        import chess
+        board = chess.Board(board_fen)
+        legal_moves = [move.uci() for move in board.legal_moves]
+        if legal_moves:
+            logger.info(f"Emergency fallback move: {legal_moves[0]}")
+            return legal_moves[0]
         return "e2e4"  # Ultimate fallback

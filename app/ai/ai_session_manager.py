@@ -99,7 +99,7 @@ class AISessionManager:
         return len(expired_sessions)
 
     def get_strategic_move(self, session_id: str, board_fen: str, move_history: List[str],
-                          suggested_moves: List[str]) -> Optional[str]:
+                          suggested_moves: List[str] = None) -> Optional[str]:
         """Get a strategic move using session context"""
         session = self.get_session(session_id)
         if not session:
@@ -115,13 +115,13 @@ class AISessionManager:
             game_phase = session.get_game_phase()
 
             # Create strategic context based on game phase and history
-            strategic_context = self._build_strategic_context(session, board_fen, suggested_moves)
+            strategic_context = self._build_strategic_context(session, board_fen)
 
             # Call the appropriate AI provider with enhanced context
             if session.ai_provider == "openai":
-                return self._get_openai_strategic_move(session, strategic_context, suggested_moves)
+                return self._get_openai_strategic_move(session, strategic_context)
             elif session.ai_provider == "gemini":
-                return self._get_gemini_strategic_move(session, strategic_context, suggested_moves)
+                return self._get_gemini_strategic_move(session, strategic_context)
             else:
                 logger.error(f"Unknown AI provider: {session.ai_provider}")
                 return None
@@ -130,8 +130,7 @@ class AISessionManager:
             logger.error(f"Error getting strategic move for session {session_id}: {e}")
             return None
 
-    def _build_strategic_context(self, session: ChessSession, board_fen: str,
-                                suggested_moves: List[str]) -> Dict[str, Any]:
+    def _build_strategic_context(self, session: ChessSession, board_fen: str) -> Dict[str, Any]:
         """Build strategic context for AI decision making"""
         from .chess_helper import get_position_description
 
@@ -139,7 +138,6 @@ class AISessionManager:
             "board_fen": board_fen,
             "game_phase": session.get_game_phase(),
             "move_count": len(session.move_history),
-            "suggested_moves": suggested_moves,
             "position_description": get_position_description(board_fen),
             "strategic_memory": session.strategic_memory.copy(),
             "recent_moves": session.move_history[-10:] if session.move_history else []
@@ -155,11 +153,11 @@ class AISessionManager:
 
         return context
 
-    def _get_openai_strategic_move(self, session: ChessSession, context: Dict[str, Any],
-                                  suggested_moves: List[str]) -> Optional[str]:
+    def _get_openai_strategic_move(self, session: ChessSession, context: Dict[str, Any]) -> Optional[str]:
         """Get strategic move from OpenAI with session context"""
         import openai
         import os
+        import chess
 
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
@@ -167,6 +165,10 @@ class AISessionManager:
             return None
 
         client = openai.OpenAI(api_key=api_key)
+
+        # Get all legal moves
+        board = chess.Board(context['board_fen'])
+        all_legal_moves = [move.uci() for move in board.legal_moves]
 
         # Build enhanced prompt with session memory
         system_prompt = f"""You are a chess grandmaster with perfect memory of this game session.
@@ -187,9 +189,9 @@ STRATEGY: [long_term_plan]"""
 
         recent_moves_text = " ".join(context['recent_moves'][-6:]) if context['recent_moves'] else "Game start"
 
-        user_prompt = f"""POSITION: {context['position_description']}
+        user_prompt = f"""POSITION (FEN): {context['board_fen']}
 
-LEGAL MOVES: {', '.join(suggested_moves)}
+ALL LEGAL MOVES: {', '.join(all_legal_moves[:30])}{'...' if len(all_legal_moves) > 30 else ''}
 
 RECENT MOVES: {recent_moves_text}
 
@@ -211,7 +213,7 @@ Based on our session history and strategic memory, choose the best move that mai
 
             # Parse the structured response
             from .openai_ai import parse_structured_move_response
-            move = parse_structured_move_response(ai_response, suggested_moves)
+            move = parse_structured_move_response(ai_response, all_legal_moves)
 
             if move:
                 # Extract and store strategic insights
@@ -223,8 +225,7 @@ Based on our session history and strategic memory, choose the best move that mai
 
         return None
 
-    def _get_gemini_strategic_move(self, session: ChessSession, context: Dict[str, Any],
-                                  suggested_moves: List[str]) -> Optional[str]:
+    def _get_gemini_strategic_move(self, session: ChessSession, context: Dict[str, Any]) -> Optional[str]:
         """Get strategic move from Gemini with session context"""
         # Similar implementation for Gemini
         logger.info("Gemini strategic moves not yet implemented, falling back to standard")

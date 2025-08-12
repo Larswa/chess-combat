@@ -384,7 +384,7 @@ def get_ai_move(ai_engine, board, board_fen, move_history, enforce_rules=True, g
             from app.ai.ai_session_manager import session_manager
             existing_session = session_manager.get_session(session_id)
             if not existing_session:
-                session_manager.create_session(session_id, ai_engine, current_player_color)
+                session_manager.create_session(session_id, ai_engine)
                 logger.info(f"Created AI session: {session_id}")
         except Exception as e:
             logger.warning(f"Could not create AI session: {e}")

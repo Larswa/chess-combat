@@ -97,7 +97,7 @@ def get_gemini_chess_move(board_fen: str, move_history: List[str] = None, sessio
     try:
         smart_suggestions = get_smart_move_suggestions(board_fen, num_suggestions=8)
         position_desc = get_position_description(board_fen)
-        
+
         # Get all legal moves for parsing validation
         import chess
         board = chess.Board(board_fen)
