@@ -193,19 +193,37 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
 @router.get("/api/game/{game_id}")
 def api_get_game(game_id: int, db: Session = Depends(get_db)):
     """
-    Get game state. Returns: {fen, moves, status}
+    Get game state. Returns: {fen, moves, status, result, termination, finished_at}
     """
     game = get_game(db, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+
     board = chess.Board()
     moves = [m.move for m in game.moves]
     for m in moves:
         board.push_uci(m)
+
+    # Determine status from both board state and database
     status = "in_progress"
-    if board.is_game_over():
+    if board.is_game_over() or game.is_finished == "true":
         status = "game_over"
-    return {"fen": board.fen(), "moves": moves, "status": status}
+
+    response = {
+        "fen": board.fen(),
+        "moves": moves,
+        "status": status
+    }
+
+    # Include game result information if game is finished
+    if game.is_finished == "true":
+        response.update({
+            "result": game.result,
+            "termination": game.termination,
+            "finished_at": game.finished_at.isoformat() if game.finished_at else None
+        })
+
+    return response
 
 @router.post("/move")
 def submit_move(move: str):

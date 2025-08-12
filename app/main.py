@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, Body, Query, status, HTTPException
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from app.ui.routes import router as ui_router
-from app.db.crud import SessionLocal, get_game, create_player
+from app.db.crud import get_session_local, get_game, create_player
 from app.db.models import Base
 from app.ai.openai_ai import get_openai_chess_move
 from app.ai.gemini_ai import get_gemini_chess_move
@@ -36,7 +36,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up Chess Combat FastAPI application")
     try:
         logger.info("Creating database tables...")
-        Base.metadata.create_all(bind=SessionLocal.kw["bind"])
+        from app.db.crud import get_engine
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
     except Exception as e:
         logger.warning(f"Database connection failed: {e}")
@@ -45,19 +47,33 @@ async def lifespan(app: FastAPI):
     # Shutdown code (if any)
     logger.info("Shutting down Chess Combat FastAPI application")
 
+def create_app(test_engine=None):
+    """Factory function to create the FastAPI app with optional test database injection"""
+    if test_engine:
+        # Inject test database before creating the app
+        from app.db.crud import set_database_engine
+        set_database_engine(test_engine)
 
-app = FastAPI(lifespan=lifespan)
-app.include_router(ui_router)
+    app = FastAPI(lifespan=lifespan)
 
-# Mount static files (for custom JS/CSS if needed)
-import os
-static_dir = os.path.join(os.path.dirname(__file__), "ui", "static")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    # Include routers
+    app.include_router(ui_router)
+
+    # Mount static files (for custom JS/CSS if needed)
+    import os
+    static_dir = os.path.join(os.path.dirname(__file__), "ui", "static")
+    if os.path.exists(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    return app
+
+# Create the default app instance
+app = create_app()
 
 # Dependency for DB session
 def get_db():
     logger.debug("Creating new database session")
+    SessionLocal = get_session_local()
     db = SessionLocal()
     try:
         yield db

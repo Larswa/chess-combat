@@ -47,11 +47,14 @@ def api_new_game(data: dict = Body(...), db: Session = Depends(get_db)):
     color = data.get('color')
     ai_engine = data.get('ai_engine', 'random')
 
-    # For now, create two players (Human and AI) or two AIs
+    # For now, create two players (Human and AI) or two AIs or two Humans
     if mode == 'human-vs-ai':
         white_name = 'Human' if color == 'white' else f'AI_{ai_engine}'
         black_name = f'AI_{ai_engine}' if color == 'white' else 'Human'
-    else:
+    elif mode == 'human-vs-human':
+        white_name = 'Human_White'
+        black_name = 'Human_Black'
+    else:  # ai-vs-ai or any other mode
         white_name = f'AI1_{ai_engine}'
         black_name = f'AI2_{ai_engine}'
 
@@ -136,6 +139,8 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
             mode = 'human-vs-ai'
         elif ('AI1_' in game.white.name and 'AI2_' in game.black.name):
             mode = 'ai-vs-ai'
+        elif ('Human_' in game.white.name and 'Human_' in game.black.name):
+            mode = 'human-vs-human'
 
     # AI move logic for both human-vs-ai and ai-vs-ai modes
     should_make_ai_move = False
@@ -149,6 +154,7 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
             should_make_ai_move = not board.is_game_over()
         else:
             should_make_ai_move = True  # Always make AI move when rules disabled
+    # For human-vs-human, never make automatic AI moves
 
     if should_make_ai_move:
         # Get move history for AI

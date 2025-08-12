@@ -11,13 +11,14 @@ import uuid
 @pytest.fixture(autouse=True)
 def cleanup_player():
     # Cleanup before and after each test
-    from app.db.crud import SessionLocal
+    from app.db.crud import get_session_local
     from app.db.models import Base
-    from app.db.crud import engine
+    from app.db.crud import get_engine
 
     # Ensure tables exist
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=get_engine())
 
+    SessionLocal = get_session_local()
     db = SessionLocal()
     try:
         # Clean up test data - use try/except to handle missing tables

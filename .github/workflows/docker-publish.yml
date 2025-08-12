@@ -1,7 +1,10 @@
 name: Build and Push Docker Image
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches: [ main ]
   workflow_dispatch:
 
@@ -14,6 +17,8 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # Only run if CI workflow succeeded or if manually triggered
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     services:
       postgres:
         image: postgres:13
@@ -53,9 +58,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Create database tables
+      - name: Database Migration
         run: |
-          python -c "from app.db.models import Base; from app.db.crud import engine; Base.metadata.create_all(bind=engine)"
+          echo "Running database migration..."
+          python migrate_db.py
+          echo "Migration completed successfully!"
 
       - name: Run all tests (unit + integration)
         run: |

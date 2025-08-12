@@ -1,4 +1,4 @@
-# GitHub Actions workflow for build/test/deploy
+# GitHub Actions workflow for build/test
 name: CI
 
 on:
@@ -8,35 +8,39 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:13
-        env:
-          POSTGRES_USER: chess
-          POSTGRES_PASSWORD: chess
-          POSTGRES_DB: chess
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
     - uses: actions/checkout@v4
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    - name: Create database tables
+
+    - name: Database Migration
+      env:
+        DATABASE_URL: "sqlite:///:memory:"
       run: |
-        python -c "from app.db.models import Base; from app.db.crud import engine; Base.metadata.create_all(bind=engine)"
-    - name: Run tests
+        echo "Running database migration..."
+        python migrate_db.py
+        echo "Migration completed successfully!"
+
+    - name: Run in-memory tests
+      env:
+        DATABASE_URL: "sqlite:///:memory:"
+        OPENAI_API_KEY: "test_key_openai"
+        GEMINI_API_KEY: "test_key_gemini"
       run: |
-        pytest
+        # Run workflow integration tests first
+        python -m pytest tests/test_workflow.py -v -s
+        # Run CI-specific tests
+        python -m pytest tests/test_ci.py -v
+        python -m pytest tests/test_in_memory.py -v
+        # Run all other tests except integration tests that require external services
+        python -m pytest tests/ -v --ignore=tests/test_integration.py --ignore=tests/test_api_integration.py

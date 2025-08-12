@@ -8,10 +8,36 @@ import datetime
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://chess:chess@localhost:5432/chess")
-logger.info(f"Connecting to database: {DATABASE_URL.split('@')[0]}@***")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Global variables for dependency injection
+_engine = None
+_session_local = None
+
+def set_database_engine(engine):
+    """Set the database engine for dependency injection (mainly for testing)"""
+    global _engine, _session_local
+    _engine = engine
+    _session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    logger.info(f"Database engine set for injection: {engine}")
+
+def get_engine():
+    """Get the database engine, creating it if necessary"""
+    global _engine
+    if _engine is None:
+        database_url = os.getenv("DATABASE_URL", "postgresql://chess:chess@localhost:5432/chess")
+        logger.info(f"Creating database engine for: {database_url.split('@')[0] if '@' in database_url else database_url}")
+        _engine = create_engine(database_url)
+    logger.info(f"Returning database engine: {_engine}")
+    return _engine
+
+def get_session_local():
+    """Get the session factory, creating it if necessary"""
+    global _session_local
+    if _session_local is None:
+        # Make sure we use the same engine instance
+        engine = get_engine()
+        _session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        logger.info(f"Created session factory with engine: {engine}")
+    return _session_local
 
 def create_player(db, name):
     logger.debug(f"Creating or finding player: {name}")
