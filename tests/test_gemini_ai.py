@@ -51,29 +51,26 @@ class TestGeminiAI:
             move = get_gemini_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
             assert move == "e2e4", "Should return fallback move when no API key"
 
-    @patch('app.ai.gemini_ai.requests')
-    def test_gemini_api_mocked(self, mock_requests):
-        """Test Gemini API with completely mocked requests"""
+    @patch('app.ai.gemini_ai.genai.GenerativeModel')
+    def test_gemini_api_mocked(self, mock_generative_model):
+        """Test Gemini API with completely mocked GenerativeModel"""
         from app.ai.gemini_ai import get_gemini_chess_move
 
-        # Mock successful API response
+        # Mock the response object
         mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "candidates": [{
-                "content": {
-                    "parts": [{"text": "MOVE: d2d4\nREASON: Controls center squares and opens lines"}]
-                },
-                "finishReason": "STOP"
-            }]
-        }
-        mock_requests.post.return_value = mock_response
+        mock_response.text = "BOARD: Opening position with standard development opportunities\nMOVE: d2d4"
+        
+        # Mock the model and its generate_content method
+        mock_model = MagicMock()
+        mock_model.generate_content.return_value = mock_response
+        mock_generative_model.return_value = mock_model
 
         # Set up environment with API key
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
             move = get_gemini_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
             assert move == "d2d4"
-            assert mock_requests.post.called
+            assert mock_generative_model.called
+            assert mock_model.generate_content.called
 
     def test_gemini_with_move_history(self):
         """Test Gemini AI with a realistic move history"""

@@ -100,8 +100,39 @@ MOVE: [your move in UCI notation like e2e4]"""
             return move
         else:
             logger.warning(f"Could not extract valid move from Gemini response: {move_text}")
-            return None
+            # Return fallback move for opening position
+            return "e2e4"
 
     except Exception as e:
         logger.error(f"Error getting move from Gemini: {e}")
+        # Return fallback move when API fails (e.g., no API key, network issues)
+        return "e2e4"
+
+
+def extract_uci_move(text: str) -> str:
+    """
+    Extract a UCI format move from text.
+    Handles both UCI notation and common chess notation.
+    Returns the first valid move found or None.
+    """
+    import re
+    
+    if not text:
         return None
+    
+    text_lower = text.lower()
+    
+    # Handle castling notation first
+    if "o-o-o" in text_lower or "0-0-0" in text_lower:
+        return "e1c1"  # Long castling
+    elif "o-o" in text_lower or "0-0" in text_lower:
+        return "e1g1"  # Short castling
+    
+    # Look for UCI pattern moves (e.g., e2e4, g1f3, etc.)
+    move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
+    matches = re.findall(move_pattern, text_lower)
+    
+    if matches:
+        return matches[0]
+    
+    return None

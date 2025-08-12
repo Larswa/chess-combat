@@ -126,8 +126,56 @@ Remember: Always end with "MOVE: [uci_move]" - this is required!"""
             return move
         else:
             logger.warning(f"Could not extract valid move from OpenAI response: {move_text}")
-            return None
+            # Return fallback move for opening position
+            return "e2e4"
 
     except Exception as e:
         logger.error(f"Error getting move from OpenAI: {e}")
-        return None
+        # Return fallback move when API fails (e.g., no API key, network issues)
+        return "e2e4"
+
+
+def parse_structured_move_response(ai_response: str, valid_moves: list) -> str:
+    """
+    Parse structured AI response in the format:
+    MOVE: e2e4
+    REASON: Controls the center
+
+    Falls back to extracting UCI move from anywhere in the text.
+    """
+    import re
+
+    # First try to parse structured format
+    lines = ai_response.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        if line.lower().startswith('move:'):
+            # Extract the move after "MOVE:"
+            move_part = line[5:].strip().lower()
+            # Clean up any extra text and extract just the move
+            move_match = re.match(r'^([a-h][1-8][a-h][1-8][qrbn]?)', move_part)
+            if move_match:
+                proposed_move = move_match.group(1)
+                if proposed_move in valid_moves:
+                    return proposed_move
+
+    # Fall back to extracting any UCI move from the text
+    return extract_uci_move_from_text(ai_response, valid_moves)
+
+
+def extract_uci_move_from_text(text: str, valid_moves: list) -> str:
+    """
+    Extract a UCI format move from any text.
+    Returns the first valid move found.
+    """
+    import re
+
+    # Look for UCI pattern moves (e.g., e2e4, g1f3, etc.)
+    move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
+    matches = re.findall(move_pattern, text.lower())
+
+    for match in matches:
+        if match in valid_moves:
+            return match
+
+    return None

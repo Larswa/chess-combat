@@ -25,13 +25,10 @@ class TestOpenAI:
             move = get_openai_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
             assert move == "e2e4", "Should return fallback move when no API key"
 
-    @patch('app.ai.openai_ai.openai.OpenAI')
-    def test_openai_api_success(self, mock_openai):
+    @patch('app.ai.openai_ai.client')
+    def test_openai_api_success(self, mock_client):
         """Test successful OpenAI API response"""
-        # Mock OpenAI client and response
-        mock_client = MagicMock()
-        mock_openai.return_value = mock_client
-
+        # Mock the response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "MOVE: d2d4\nREASON: Controls center squares"
@@ -42,12 +39,14 @@ class TestOpenAI:
             assert move == "d2d4"
             assert mock_client.chat.completions.create.called
 
-    @patch('app.ai.openai_ai.openai.OpenAI')
-    def test_openai_with_move_history(self, mock_openai):
+    @patch('app.ai.openai_ai.client')
+    def test_openai_with_move_history(self, mock_client):
         """Test OpenAI AI with realistic move history and context"""
-        # Mock OpenAI client and response
-        mock_client = MagicMock()
-        mock_openai.return_value = mock_client
+        # Mock the response
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "MOVE: g1f3\nREASON: Knight development"
+        mock_client.chat.completions.create.return_value = mock_response
 
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]

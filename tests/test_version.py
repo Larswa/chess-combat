@@ -9,6 +9,10 @@ This module tests all aspects of version handling including:
 """
 
 import pytest
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import os
 import tempfile
 from unittest.mock import patch, mock_open, MagicMock
@@ -77,6 +81,39 @@ class TestVersionModule:
             current_date = datetime.now().strftime("%Y-%m-%d")
             assert result == current_date
 
+    @patch.dict(os.environ, {"BUILD_TIMESTAMP": "2025-12-25 14:30:45"})
+    def test_get_deployment_timestamp_from_env(self):
+        """Test deployment timestamp from BUILD_TIMESTAMP environment variable"""
+        from app.version import get_deployment_timestamp
+
+        result = get_deployment_timestamp()
+        assert result == "2025-12-25 14:30:45"
+
+    @patch.dict(os.environ, {"BUILD_DATE": "2025-06-15"})
+    def test_get_deployment_timestamp_from_build_date(self):
+        """Test deployment timestamp when only BUILD_DATE is set"""
+        from app.version import get_deployment_timestamp
+
+        result = get_deployment_timestamp()
+        assert result.startswith("2025-06-15 ")
+        assert len(result) == 19  # YYYY-MM-DD HH:MM:SS format
+
+    def test_get_deployment_timestamp_fallback(self):
+        """Test deployment timestamp fallback to current datetime"""
+        from app.version import get_deployment_timestamp
+        from datetime import datetime
+
+        # Remove any build-related environment variables
+        env_clean = {k: v for k, v in os.environ.items() 
+                    if not k.startswith("BUILD")}
+        
+        with patch.dict(os.environ, env_clean, clear=True):
+            with patch("os.path.getmtime", side_effect=OSError):
+                result = get_deployment_timestamp()
+                current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M")
+                # Check first 16 characters (up to minutes) since seconds might differ
+                assert result[:16] == current_datetime[:16]
+
     @patch("builtins.open", mock_open(read_data="2.0.1\n"))
     @patch.dict(os.environ, {"BUILD_DATE": "2025-06-15"})
     def test_get_version_info_complete(self):
@@ -87,9 +124,15 @@ class TestVersionModule:
         expected = {
             "version": "2.0.1",
             "build_date": "2025-06-15",
+            "deployment_timestamp": "2025-06-15 " + result["deployment_timestamp"].split(" ")[1],  # Date + current time
             "name": "Chess Combat"
         }
-        assert result == expected
+        # Check individual fields since timestamp will have current time
+        assert result["version"] == expected["version"]
+        assert result["build_date"] == expected["build_date"]
+        assert result["name"] == expected["name"]
+        assert result["deployment_timestamp"].startswith("2025-06-15")
+        assert len(result["deployment_timestamp"]) == 19  # YYYY-MM-DD HH:MM:SS format
 
 
 class TestVersionAPI:
@@ -107,7 +150,7 @@ class TestVersionAPI:
         assert response.status_code == 200
         data = response.json()
 
-        required_fields = ["version", "build_date", "name"]
+        required_fields = ["version", "build_date", "deployment_timestamp", "name"]
         for field in required_fields:
             assert field in data, f"Missing required field: {field}"
 
@@ -118,6 +161,7 @@ class TestVersionAPI:
 
         assert isinstance(data["version"], str)
         assert isinstance(data["build_date"], str)
+        assert isinstance(data["deployment_timestamp"], str)
         assert isinstance(data["name"], str)
 
     def test_version_endpoint_content_type(self):
