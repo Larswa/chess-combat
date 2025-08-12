@@ -1,8 +1,14 @@
 import pytest
+import sys
+import os
+from pathlib import Path
+
+# Add the parent directory to Python path so we can import app
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from fastapi.testclient import TestClient
 from app.main import app
 from unittest.mock import patch, mock_open
-import os
 
 # Unit test: does not require DB
 

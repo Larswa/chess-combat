@@ -4,7 +4,13 @@ Test for Gemini AI integration - Unit tests only
 """
 import pytest
 import os
+import sys
+from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+# Add the parent directory to Python path so we can import app
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from app.ai.gemini_ai import extract_uci_move
 
 class TestGeminiAI:

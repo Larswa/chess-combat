@@ -5,7 +5,13 @@ Test for OpenAI AI integration - Unit tests only
 import pytest
 import os
 import re
+import sys
+from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+# Add the parent directory to Python path so we can import app
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from app.ai.openai_ai import get_openai_chess_move
 
 class TestOpenAI:
