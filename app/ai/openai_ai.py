@@ -35,30 +35,40 @@ def get_openai_chess_move(fen: str, move_history: list = None, invalid_moves: li
         # Create board from FEN to get current position info
         board = chess.Board(fen)
 
-        # Build a simple, clear prompt
-        prompt = f"""You are playing chess. Here's the current position:
+        # Build a comprehensive prompt optimized for GPT-4's chess capabilities
+        prompt = f"""You are an expert chess player with deep understanding of tactics, strategy, and positional play.
 
-FEN: {fen}
+Current position: {fen}
 Turn: {"White" if board.turn else "Black"}
 
-{f"Previous moves: {' '.join(move_history[-10:])}" if move_history else ""}
+{f"Game history (last 10 moves): {' '.join(move_history[-10:])}" if move_history else ""}
 
-{f"Don't play these invalid moves: {', '.join(invalid_moves[-5:])}" if invalid_moves else ""}
+{f"Invalid moves to avoid: {', '.join(invalid_moves[-5:])}" if invalid_moves else ""}
 
-Please respond with only your move in UCI notation (like e2e4 or g1f3).
-Just the move, nothing else."""
+Analyze this position considering:
+1. Tactical opportunities (pins, forks, discovered attacks, etc.)
+2. Strategic factors (piece activity, pawn structure, king safety)
+3. Opening principles or endgame technique as appropriate
+
+IMPORTANT: You MUST provide a move in UCI notation at the end.
+
+Format your response exactly like this:
+BOARD: [analyze key pieces, threats, and strategic factors]
+MOVE: [your move in UCI notation like e2e4]
+
+Remember: Always end with "MOVE: [uci_move]" - this is required!"""
 
         logger.debug(f"OpenAI prompt: {prompt}")
 
-        # Get response from OpenAI using new client
+        # Get response from OpenAI using new client with GPT-4o (latest model)
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a chess engine. Respond only with UCI moves."},
+                {"role": "system", "content": "You are an expert chess engine with deep strategic understanding. Analyze positions carefully and suggest the strongest moves based on tactical and positional considerations. Always end your response with a clear move in UCI notation."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=10,
-            temperature=0.7
+            max_tokens=300,  # Increased for detailed analysis but still controlled
+            temperature=0.2  # Lower temperature for more consistent, logical analysis
         )
 
         if not response or not response.choices:
@@ -67,14 +77,51 @@ Just the move, nothing else."""
 
         # Extract move from response
         move_text = response.choices[0].message.content.strip()
-        logger.debug(f"OpenAI raw response: {move_text}")
+        logger.info(f"OpenAI full response: {move_text}")
 
-        # Try to find a UCI move pattern (4-5 characters like e2e4 or e7e8q)
-        move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
-        matches = re.findall(move_pattern, move_text.lower())
+        # Extract board description and move
+        board_description = ""
+        move = None
 
-        if matches:
-            move = matches[0]
+        if "BOARD:" in move_text and "MOVE:" in move_text:
+            lines = move_text.split('\n')
+            for line in lines:
+                if line.startswith("BOARD:"):
+                    board_description = line[6:].strip()
+                elif line.startswith("MOVE:"):
+                    move_line = line[5:].strip()
+                    # Extract UCI move from the move line
+                    move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
+                    matches = re.findall(move_pattern, move_line.lower())
+                    if matches:
+                        move = matches[0]
+        else:
+            # Fallback: try to extract move from anywhere in response
+            move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
+            matches = re.findall(move_pattern, move_text.lower())
+            if matches:
+                move = matches[0]
+
+        # If still no move, try common chess notation patterns
+        if not move:
+            # Look for moves in algebraic notation and convert common ones
+            common_moves = {
+                '1.e4': 'e2e4', '1...e5': 'e7e5', '1...c5': 'c7c5', '1...e6': 'e7e6',
+                'e4': 'e2e4', 'e5': 'e7e5', 'Nf3': 'g1f3', 'Nc6': 'b8c6',
+                'Bb5': 'f1b5', 'Be7': 'f8e7', 'O-O': 'e1g1', 'O-O-O': 'e1c1'
+            }
+            for notation, uci in common_moves.items():
+                if notation in move_text:
+                    move = uci
+                    break
+
+        # Log what AI thinks about the board vs reality
+        actual_board_info = f"White to move: {board.turn}, Castling: {board.castling_rights}, En passant: {board.ep_square}"
+        logger.info(f"AI's board perception: {board_description}")
+        logger.info(f"Actual board state: FEN={fen}")
+        logger.info(f"Actual board info: {actual_board_info}")
+
+        if move:
             logger.info(f"OpenAI suggested move: {move}")
             return move
         else:

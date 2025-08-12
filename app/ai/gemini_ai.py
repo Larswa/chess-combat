@@ -30,18 +30,27 @@ def get_gemini_chess_move(fen: str, move_history: list = None, invalid_moves: li
         # Create board from FEN to get current position info
         board = chess.Board(fen)
 
-        # Build a simple, clear prompt
-        prompt = f"""You are playing chess. Here's the current position:
+        # Build a comprehensive prompt optimized for Gemini's chess capabilities
+        prompt = f"""You are an expert chess player with deep understanding of tactics, strategy, and positional play.
 
-FEN: {fen}
+Current position: {fen}
 Turn: {"White" if board.turn else "Black"}
 
-{f"Previous moves: {' '.join(move_history[-10:])}" if move_history else ""}
+{f"Game history (last 10 moves): {' '.join(move_history[-10:])}" if move_history else ""}
 
-{f"Don't play these invalid moves: {', '.join(invalid_moves[-5:])}" if invalid_moves else ""}
+{f"Invalid moves to avoid: {', '.join(invalid_moves[-5:])}" if invalid_moves else ""}
 
-Please respond with only your move in UCI notation (like e2e4 or g1f3).
-Just the move, nothing else."""
+Analyze this position considering:
+1. Tactical opportunities (pins, forks, discovered attacks, etc.)
+2. Strategic factors (piece activity, pawn structure, king safety)
+3. Opening principles or endgame technique as appropriate
+
+First, describe the key features of the position.
+Then provide your best move in UCI notation.
+
+Format your response exactly like this:
+BOARD: [analyze key pieces, threats, and strategic factors]
+MOVE: [your move in UCI notation like e2e4]"""
 
         logger.debug(f"Gemini prompt: {prompt}")
 
@@ -55,14 +64,38 @@ Just the move, nothing else."""
 
         # Extract move from response
         move_text = response.text.strip()
-        logger.debug(f"Gemini raw response: {move_text}")
+        logger.info(f"Gemini full response: {move_text}")
 
-        # Try to find a UCI move pattern (4-5 characters like e2e4 or e7e8q)
-        move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
-        matches = re.findall(move_pattern, move_text.lower())
+        # Extract board description and move
+        board_description = ""
+        move = None
 
-        if matches:
-            move = matches[0]
+        if "BOARD:" in move_text and "MOVE:" in move_text:
+            lines = move_text.split('\n')
+            for line in lines:
+                if line.startswith("BOARD:"):
+                    board_description = line[6:].strip()
+                elif line.startswith("MOVE:"):
+                    move_line = line[5:].strip()
+                    # Extract UCI move from the move line
+                    move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
+                    matches = re.findall(move_pattern, move_line.lower())
+                    if matches:
+                        move = matches[0]
+        else:
+            # Fallback: try to extract move from anywhere in response
+            move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
+            matches = re.findall(move_pattern, move_text.lower())
+            if matches:
+                move = matches[0]
+
+        # Log what AI thinks about the board vs reality
+        actual_board_info = f"White to move: {board.turn}, Castling: {board.castling_rights}, En passant: {board.ep_square}"
+        logger.info(f"AI's board perception: {board_description}")
+        logger.info(f"Actual board state: FEN={fen}")
+        logger.info(f"Actual board info: {actual_board_info}")
+
+        if move:
             logger.info(f"Gemini suggested move: {move}")
             return move
         else:
