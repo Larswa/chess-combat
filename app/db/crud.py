@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import os
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -72,3 +73,20 @@ def get_game(db, game_id):
     else:
         logger.debug(f"Game {game_id} not found")
     return game
+
+def update_game_result(db, game_id, result, termination):
+    """Update game with final result when it ends"""
+    logger.info(f"Updating game {game_id} with result: {result}, termination: {termination}")
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if game:
+        game.is_finished = "true"
+        game.result = result
+        game.termination = termination
+        game.finished_at = datetime.datetime.now(datetime.UTC)
+        db.commit()
+        db.refresh(game)
+        logger.info(f"Successfully updated game {game_id} with final result")
+        return game
+    else:
+        logger.error(f"Game {game_id} not found for result update")
+        return None

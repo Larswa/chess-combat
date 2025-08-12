@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Request, Body, status, HTTPException, Depends
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
-from app.db.crud import get_game, create_game, add_move, create_player
+from app.db.crud import get_game, create_game, add_move, create_player, update_game_result
 from app.db.models import Game, Move
 from app.db.deps import get_db
 from app.ai.openai_ai import get_openai_chess_move
@@ -17,6 +17,31 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+
+def get_game_termination(board):
+    """Determine how the game ended"""
+    if board.is_checkmate():
+        return "checkmate"
+    elif board.is_stalemate():
+        return "stalemate"
+    elif board.is_insufficient_material():
+        return "insufficient_material"
+    elif board.is_seventyfive_moves():
+        return "seventy_five_moves"
+    elif board.is_fivefold_repetition():
+        return "fivefold_repetition"
+    else:
+        return "draw"
+
+def check_and_update_game_result(db, game_id, board):
+    """Check if game is over and update database if so"""
+    if board.is_game_over():
+        result = board.result()
+        termination = get_game_termination(board)
+        update_game_result(db, game_id, result, termination)
+        logger.info(f"Game {game_id} ended: {result} by {termination}")
+        return True
+    return False
 
 
 # Main UI route
@@ -104,6 +129,9 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
     add_move(db, game_id, move_uci)
     moves.append(move_uci)
 
+    # Check if game is over after human move
+    check_and_update_game_result(db, game_id, board)
+
     # Check if this is a human-vs-ai game and not over
     white_player = getattr(game, 'white_id', None)
     black_player = getattr(game, 'black_id', None)
@@ -155,6 +183,10 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
 
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
+
+            # Check if game is over after AI move
+            check_and_update_game_result(db, game_id, board)
+
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
     return {"fen": board.fen(), "moves": moves, "status": "ok"}
 
@@ -239,6 +271,10 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
 
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
+
+            # Check if game is over after AI move
+            check_and_update_game_result(db, game_id, board)
+
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
 
     return {"fen": board.fen(), "moves": moves, "status": "no_move"}
