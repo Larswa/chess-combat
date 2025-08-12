@@ -27,6 +27,12 @@ def get_gemini_chess_move(fen: str, move_history: list = None, invalid_moves: li
         UCI move string (e.g., "e2e4")
     """
     try:
+        # Check if API key is configured
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            logger.error("Gemini API key not configured")
+            raise ValueError("Gemini API key not configured. Set GEMINI_API_KEY environment variable.")
+
         # Create board from FEN to get current position info
         board = chess.Board(fen)
 
@@ -103,9 +109,12 @@ MOVE: [your move in UCI notation like e2e4]"""
             # Return fallback move for opening position
             return "e2e4"
 
+    except ValueError as ve:
+        # Re-raise ValueError (like missing API key) - don't fallback for configuration errors
+        raise ve
     except Exception as e:
         logger.error(f"Error getting move from Gemini: {e}")
-        # Return fallback move when API fails (e.g., no API key, network issues)
+        # Return fallback move when API fails (e.g., network issues, parsing errors)
         return "e2e4"
 
 

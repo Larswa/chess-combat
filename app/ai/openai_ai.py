@@ -11,9 +11,10 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# Configure OpenAI client
-openai_api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=openai_api_key) if openai_api_key else None
+# Configure OpenAI client - will be created when needed
+def _get_openai_client():
+    """Get OpenAI client, let OpenAI library handle API key validation"""
+    return OpenAI()  # OpenAI library will handle missing API key
 
 def get_openai_chess_move(fen: str, move_history: list = None, invalid_moves: list = None) -> str:
     """
@@ -28,9 +29,8 @@ def get_openai_chess_move(fen: str, move_history: list = None, invalid_moves: li
         UCI move string (e.g., "e2e4")
     """
     try:
-        if not client:
-            logger.error("OpenAI API key not configured")
-            return None
+        # Get OpenAI client (this will check for API key)
+        client = _get_openai_client()
 
         # Create board from FEN to get current position info
         board = chess.Board(fen)
@@ -129,9 +129,17 @@ Remember: Always end with "MOVE: [uci_move]" - this is required!"""
             # Return fallback move for opening position
             return "e2e4"
 
+    except ValueError as ve:
+        # Re-raise ValueError (like missing API key) - don't fallback for configuration errors
+        raise ve
     except Exception as e:
+        # Check if it's an OpenAI-related error (configuration, API key, etc.)
+        if "api_key" in str(e).lower() or "openai" in str(e).lower():
+            # Re-raise OpenAI configuration errors
+            raise e
+
         logger.error(f"Error getting move from OpenAI: {e}")
-        # Return fallback move when API fails (e.g., no API key, network issues)
+        # Return fallback move when API fails (e.g., network issues, parsing errors)
         return "e2e4"
 
 

@@ -21,13 +21,17 @@ class TestOpenAI:
         """Test OpenAI AI behavior when no API key is set"""
         # Mock environment without API key
         with patch.dict(os.environ, {}, clear=True):
-            # Should return default fallback move
-            move = get_openai_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
-            assert move == "e2e4", "Should return fallback move when no API key"
+            # Should raise exception when no API key is configured
+            with pytest.raises(Exception, match="api_key client option must be set"):
+                get_openai_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
 
-    @patch('app.ai.openai_ai.client')
-    def test_openai_api_success(self, mock_client):
+    @patch('app.ai.openai_ai._get_openai_client')
+    def test_openai_api_success(self, mock_get_client):
         """Test successful OpenAI API response"""
+        # Mock the client
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
         # Mock the response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -39,9 +43,13 @@ class TestOpenAI:
             assert move == "d2d4"
             assert mock_client.chat.completions.create.called
 
-    @patch('app.ai.openai_ai.client')
-    def test_openai_with_move_history(self, mock_client):
+    @patch('app.ai.openai_ai._get_openai_client')
+    def test_openai_with_move_history(self, mock_get_client):
         """Test OpenAI AI with realistic move history and context"""
+        # Mock the client
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
         # Mock the response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]

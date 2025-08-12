@@ -47,9 +47,9 @@ class TestGeminiAI:
 
         # Mock environment without API key
         with patch.dict(os.environ, {}, clear=True):
-            # Should return default fallback move
-            move = get_gemini_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
-            assert move == "e2e4", "Should return fallback move when no API key"
+            # Should raise ValueError when no API key is configured
+            with pytest.raises(ValueError, match="Gemini API key not configured"):
+                get_gemini_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
 
     @patch('app.ai.gemini_ai.genai.GenerativeModel')
     def test_gemini_api_mocked(self, mock_generative_model):
@@ -80,8 +80,7 @@ class TestGeminiAI:
         move_history = ["e2e4", "e7e5", "g1f3", "b8c6"]
         board_fen = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
 
-        # Mock environment without API key to get fallback
+        # Mock environment without API key - should raise exception
         with patch.dict(os.environ, {}, clear=True):
-            move = get_gemini_chess_move(board_fen, move_history)
-            # Should still return fallback move even with complex position
-            assert move == "e2e4", "Should return fallback move when no API key, regardless of position"
+            with pytest.raises(ValueError, match="Gemini API key not configured"):
+                get_gemini_chess_move(board_fen, move_history)
