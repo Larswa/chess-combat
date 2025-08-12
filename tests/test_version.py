@@ -104,9 +104,9 @@ class TestVersionModule:
         from datetime import datetime
 
         # Remove any build-related environment variables
-        env_clean = {k: v for k, v in os.environ.items() 
+        env_clean = {k: v for k, v in os.environ.items()
                     if not k.startswith("BUILD")}
-        
+
         with patch.dict(os.environ, env_clean, clear=True):
             with patch("os.path.getmtime", side_effect=OSError):
                 result = get_deployment_timestamp()

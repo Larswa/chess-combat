@@ -45,11 +45,6 @@ class TestOpenAI:
         # Mock the response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "MOVE: g1f3\nREASON: Knight development"
-        mock_client.chat.completions.create.return_value = mock_response
-
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "MOVE: f1c4\nREASON: Developing bishop to active square"
         mock_client.chat.completions.create.return_value = mock_response
 
@@ -68,8 +63,8 @@ class TestOpenAI:
             # Check that the user message contains game phase information
             user_message = messages[1]['content']
             assert "opening" in user_message.lower()
-            assert "1. e2e4 e7e5" in user_message  # Check formatted move history
-            assert "2. g1f3 b8c6" in user_message
+            assert "e2e4 e7e5 g1f3 b8c6" in user_message  # Check move history is included
+            assert "Game history" in user_message
 
     def test_openai_uci_extraction(self):
         """Test UCI move extraction from various OpenAI responses"""

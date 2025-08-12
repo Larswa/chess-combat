@@ -59,7 +59,7 @@ class TestGeminiAI:
         # Mock the response object
         mock_response = MagicMock()
         mock_response.text = "BOARD: Opening position with standard development opportunities\nMOVE: d2d4"
-        
+
         # Mock the model and its generate_content method
         mock_model = MagicMock()
         mock_model.generate_content.return_value = mock_response

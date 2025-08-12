@@ -116,23 +116,23 @@ def extract_uci_move(text: str) -> str:
     Returns the first valid move found or None.
     """
     import re
-    
+
     if not text:
         return None
-    
+
     text_lower = text.lower()
-    
+
     # Handle castling notation first
     if "o-o-o" in text_lower or "0-0-0" in text_lower:
         return "e1c1"  # Long castling
     elif "o-o" in text_lower or "0-0" in text_lower:
         return "e1g1"  # Short castling
-    
+
     # Look for UCI pattern moves (e.g., e2e4, g1f3, etc.)
     move_pattern = r'\b[a-h][1-8][a-h][1-8][qrbn]?\b'
     matches = re.findall(move_pattern, text_lower)
-    
+
     if matches:
         return matches[0]
-    
+
     return None

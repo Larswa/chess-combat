@@ -34,7 +34,7 @@ def get_deployment_timestamp() -> str:
     build_timestamp = os.getenv("BUILD_TIMESTAMP")
     if build_timestamp:
         return build_timestamp
-    
+
     # Check for BUILD_DATE environment variable (date only) and add current time
     build_date = os.getenv("BUILD_DATE")
     if build_date:
