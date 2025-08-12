@@ -34,9 +34,13 @@ class MoveCreate(BaseModel):
 async def lifespan(app: FastAPI):
     # Startup code
     logger.info("Starting up Chess Combat FastAPI application")
-    logger.info("Creating database tables...")
-    Base.metadata.create_all(bind=SessionLocal.kw["bind"])
-    logger.info("Database tables created successfully")
+    try:
+        logger.info("Creating database tables...")
+        Base.metadata.create_all(bind=SessionLocal.kw["bind"])
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.warning(f"Database connection failed: {e}")
+        logger.info("Running without database - some features may be limited")
     yield
     # Shutdown code (if any)
     logger.info("Shutting down Chess Combat FastAPI application")

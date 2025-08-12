@@ -3,7 +3,7 @@ Simple OpenAI integration for chess moves.
 Just presents board state and gets move decision.
 """
 
-import openai
+from openai import OpenAI
 import os
 import logging
 import chess
@@ -11,8 +11,9 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# Configure OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Configure OpenAI client
+openai_api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=openai_api_key) if openai_api_key else None
 
 def get_openai_chess_move(fen: str, move_history: list = None, invalid_moves: list = None) -> str:
     """
@@ -27,6 +28,10 @@ def get_openai_chess_move(fen: str, move_history: list = None, invalid_moves: li
         UCI move string (e.g., "e2e4")
     """
     try:
+        if not client:
+            logger.error("OpenAI API key not configured")
+            return None
+
         # Create board from FEN to get current position info
         board = chess.Board(fen)
 
@@ -45,8 +50,8 @@ Just the move, nothing else."""
 
         logger.debug(f"OpenAI prompt: {prompt}")
 
-        # Get response from OpenAI
-        response = openai.ChatCompletion.create(
+        # Get response from OpenAI using new client
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a chess engine. Respond only with UCI moves."},
