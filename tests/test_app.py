@@ -19,7 +19,7 @@ def test_root():
     assert "text/html" in response.headers.get("content-type", "")
 
 # Unit test: AI is mocked, no DB required
-@patch("app.main.get_openai_chess_move", return_value="e2e4")
+@patch("app.ai.openai_ai.get_openai_chess_move", return_value="e2e4")
 def test_ai_vs_ai(mock_ai):
     client = TestClient(app)
     response = client.post("/ai-vs-ai/", json={"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "moves": []})
