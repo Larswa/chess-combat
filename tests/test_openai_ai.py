@@ -28,7 +28,7 @@ class TestOpenAI:
 
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "d2d4"
+        mock_response.choices[0].message.content = "MOVE: d2d4\nREASON: Controls center squares"
         mock_client.chat.completions.create.return_value = mock_response
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
@@ -45,7 +45,7 @@ class TestOpenAI:
 
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "f1c4"  # Developing bishop
+        mock_response.choices[0].message.content = "MOVE: f1c4\nREASON: Developing bishop to active square"
         mock_client.chat.completions.create.return_value = mock_response
 
         # Test with some opening moves

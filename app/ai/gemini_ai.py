@@ -54,7 +54,6 @@ def get_gemini_chess_move(board_fen: str, move_history: List[str] = None, sessio
     if session_id:
         try:
             from .ai_session_manager import session_manager
-            from .chess_helper import get_smart_move_suggestions
 
             # Get smart suggestions for the session manager
             smart_suggestions = get_smart_move_suggestions(board_fen, num_suggestions=5)
@@ -95,20 +94,21 @@ def get_gemini_chess_move(board_fen: str, move_history: List[str] = None, sessio
     move_history_text = " ".join(move_pairs) if move_pairs else "Starting position"
 
     # Get smart move suggestions to guide the AI
-    smart_suggestions = get_smart_move_suggestions(board_fen, num_suggestions=3)
-    position_desc = get_position_description(board_fen)
-
-    # Get smart move suggestions using chess helper
     try:
-        from .chess_helper import get_smart_move_suggestions, get_position_description
         smart_suggestions = get_smart_move_suggestions(board_fen, num_suggestions=8)
         position_desc = get_position_description(board_fen)
+        
+        # Get all legal moves for parsing validation
+        import chess
+        board = chess.Board(board_fen)
+        all_legal_moves = [move.uci() for move in board.legal_moves]
 
         logger.info(f"Chess helper provided {len(smart_suggestions)} move suggestions: {smart_suggestions}")
     except Exception as e:
         logger.error(f"Error getting chess helper suggestions: {e}")
         smart_suggestions = []
         position_desc = "Unable to analyze position"
+        all_legal_moves = []
 
     prompt = f"""You are a professional chess grandmaster. Choose the best move from the suggested legal moves.
 
@@ -242,9 +242,9 @@ Choose the BEST move from the options above:"""
                         move_text = candidate["content"]["parts"][0]["text"].strip()
                         logger.debug(f"Gemini raw response: {move_text}")
 
-                        # Parse structured response
+                        # Parse structured response using all legal moves for validation
                         from .openai_ai import parse_structured_move_response
-                        proposed_move = parse_structured_move_response(move_text, smart_suggestions)
+                        proposed_move = parse_structured_move_response(move_text, all_legal_moves)
 
                         if proposed_move:
                             # Validate the move using chess helper
@@ -287,7 +287,6 @@ Choose the BEST move from the options above:"""
     logger.error("All Gemini models failed or are unavailable")
 
     try:
-        from .chess_helper import get_smart_move_suggestions
         suggestions = get_smart_move_suggestions(board_fen, num_suggestions=1)
         if suggestions:
             fallback_move = suggestions[0]

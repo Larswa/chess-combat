@@ -56,7 +56,7 @@ class TestGeminiAI:
         mock_response.json.return_value = {
             "candidates": [{
                 "content": {
-                    "parts": [{"text": "d2d4"}]
+                    "parts": [{"text": "MOVE: d2d4\nREASON: Controls center squares and opens lines"}]
                 },
                 "finishReason": "STOP"
             }]
