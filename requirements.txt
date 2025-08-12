@@ -5,5 +5,7 @@ psycopg2-binary
 requests
 pytest
 openai
+google-generativeai
 uvicorn
 jinja2
+pydantic

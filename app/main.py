@@ -107,9 +107,14 @@ def ai_vs_ai(
     moves: list = Body(default=[]),
     ai: str = Query("openai", description="Which AI to use: 'openai' or 'gemini'"),
     enforce_rules: bool = Query(True, description="Enforce chess rules (illegal moves not allowed)"),
-    auto_play: bool = Query(False, description="If true, play until game over automatically")
+    auto_play: bool = Query(False, description="If true, play until game over automatically"),
+    max_moves: int = Query(100, description="Maximum moves to play in auto mode")
 ):
-    logger.info(f"Starting AI vs AI game - AI: {ai}, auto_play: {auto_play}, enforce_rules: {enforce_rules}")
+    """
+    Simple AI vs AI chess game.
+    Just presents board state to AI and implements their move decisions.
+    """
+    logger.info(f"Starting AI vs AI game - AI: {ai}, auto_play: {auto_play}")
     logger.debug(f"Starting FEN: {fen}")
     logger.debug(f"Initial moves: {moves}")
 
@@ -119,51 +124,79 @@ def ai_vs_ai(
     invalid_moves = []
 
     def get_ai_move():
+        """Get move from AI - just present board state and invalid moves"""
         logger.debug(f"Requesting move from {ai} AI")
+        current_fen = board.fen()
+
+        # Get recent invalid moves to avoid
+        recent_invalid = [im["move"] for im in invalid_moves[-3:] if im.get("move")]
+
         if ai == "gemini":
-            return get_gemini_chess_move(board.fen(), move_history)
+            from app.ai.gemini_ai import get_gemini_chess_move
+            return get_gemini_chess_move(current_fen, move_history, recent_invalid)
         else:
-            return get_openai_chess_move(board.fen(), move_history)
+            from app.ai.openai_ai import get_openai_chess_move
+            return get_openai_chess_move(current_fen, move_history, recent_invalid)
 
     def play_one_move():
+        """Play one move with simple retry logic"""
         logger.debug("Playing one move...")
-        move_uci = get_ai_move()
-        logger.info(f"AI suggested move: {move_uci}")
-        try:
-            move = chess.Move.from_uci(move_uci)
-            if move in board.pseudo_legal_moves:
+        current_fen = board.fen()
+
+        # Simple retry logic (max 3 attempts)
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            move_uci = get_ai_move()
+            logger.info(f"AI suggested move (attempt {attempt + 1}): {move_uci}")
+
+            if not move_uci:
+                logger.error("AI returned no move")
+                invalid_moves.append({"move": "none", "fen": current_fen, "reason": "no_move_returned"})
+                continue
+
+            try:
+                move = chess.Move.from_uci(move_uci)
+
                 if enforce_rules:
                     if move in board.legal_moves:
+                        # Valid move - play it
                         board.push(move)
                         move_history.append(move_uci)
                         ai_moves.append(move_uci)
                         logger.info(f"Move {move_uci} accepted and played")
+                        return True
                     else:
-                        logger.warning(f"Move {move_uci} is illegal")
-                        invalid_moves.append({"move": move_uci, "fen": board.fen(), "reason": "illegal"})
+                        logger.warning(f"Move {move_uci} is illegal (attempt {attempt + 1})")
+                        invalid_moves.append({"move": move_uci, "fen": current_fen, "reason": "illegal"})
                 else:
-                    board.push(move)
-                    move_history.append(move_uci)
-                    ai_moves.append(move_uci)
-                    logger.info(f"Move {move_uci} played (rules not enforced)")
-            else:
-                logger.warning(f"Move {move_uci} is not pseudo-legal")
-                invalid_moves.append({"move": move_uci, "fen": board.fen(), "reason": "not pseudo-legal"})
-            return True, None
-        except Exception as e:
-            logger.error(f"Error processing move {move_uci}: {str(e)}")
-            invalid_moves.append({"move": move_uci, "fen": board.fen(), "reason": str(e)})
-            return True, None  # Continue autoplay
+                    # Rules not enforced - play any pseudo-legal move
+                    if move in board.pseudo_legal_moves:
+                        board.push(move)
+                        move_history.append(move_uci)
+                        ai_moves.append(move_uci)
+                        logger.info(f"Move {move_uci} played (rules not enforced)")
+                        return True
+                    else:
+                        logger.warning(f"Move {move_uci} is not pseudo-legal (attempt {attempt + 1})")
+                        invalid_moves.append({"move": move_uci, "fen": current_fen, "reason": "not_pseudo_legal"})
 
+            except ValueError as e:
+                logger.warning(f"Invalid move format '{move_uci}': {e} (attempt {attempt + 1})")
+                invalid_moves.append({"move": move_uci, "fen": current_fen, "reason": f"invalid_format: {e}"})
+
+        logger.error(f"Failed to get valid move after {max_attempts} attempts")
+        return False
+
+    # Execute the game
     if auto_play:
         logger.info("Starting auto-play mode")
         move_count = 0
-        while not board.is_game_over():
+        while not board.is_game_over() and move_count < max_moves:
             move_count += 1
             logger.debug(f"Auto-play move {move_count}")
-            play_one_move()
-            if move_count > 200:  # Safety limit
-                logger.warning("Auto-play stopped due to move limit (200)")
+            success = play_one_move()
+            if not success:
+                logger.error(f"Auto-play stopped due to repeated invalid moves at move {move_count}")
                 break
         logger.info(f"Auto-play completed after {move_count} moves")
     else:
@@ -189,3 +222,10 @@ def ai_vs_ai(
         logger.info(f"Game result: {board.result()}")
 
     return result
+
+
+# Health check endpoint
+@app.get("/health")
+def health_check():
+    """Simple health check endpoint"""
+    return {"status": "healthy", "service": "chess-combat"}

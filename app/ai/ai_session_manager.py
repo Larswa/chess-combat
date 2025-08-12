@@ -99,8 +99,8 @@ class AISessionManager:
         return len(expired_sessions)
 
     def get_strategic_move(self, session_id: str, board_fen: str, move_history: List[str],
-                          suggested_moves: List[str] = None) -> Optional[str]:
-        """Get a strategic move using session context"""
+                          invalid_moves: List[str] = None) -> Optional[str]:
+        """Get a strategic move using session context and avoiding invalid moves"""
         session = self.get_session(session_id)
         if not session:
             logger.warning(f"Session {session_id} not found for strategic move")
@@ -111,11 +111,17 @@ class AISessionManager:
             session.move_history = move_history.copy()
             session.update_access_time()
 
+            # Store invalid moves in session memory to avoid repetition
+            if invalid_moves:
+                session.add_strategic_insight("invalid_moves_current_position", invalid_moves)
+                logger.debug(f"Session {session_id}: tracking {len(invalid_moves)} invalid moves")
+
             # Build conversation context for strategic thinking
             game_phase = session.get_game_phase()
 
             # Create strategic context based on game phase and history
             strategic_context = self._build_strategic_context(session, board_fen)
+            strategic_context["invalid_moves"] = invalid_moves or []
 
             # Call the appropriate AI provider with enhanced context
             if session.ai_provider == "openai":
@@ -277,6 +283,7 @@ Based on our session history and strategic memory, choose the best move that mai
             return stats
 
 # Global session manager instance
+session_manager = AISessionManager(session_timeout=3600)  # 1 hour timeout
 session_manager = AISessionManager()
 
 def get_session_manager() -> AISessionManager:
