@@ -62,8 +62,14 @@ def api_new_game(data: dict = Body(...), db: Session = Depends(get_db)):
     # Ensure players exist
     white_player = create_player(db, white_name)
     black_player = create_player(db, black_name)
+
     # Create game
     game = create_game(db, white_player.id, black_player.id)
+
+    # Ensure the game is committed to database immediately
+    db.flush()
+    db.commit()
+
     board = chess.Board()
     logger.info(f"Created game {game.id} with players {white_player.id} vs {black_player.id}")
     return {"game_id": game.id, "fen": board.fen(), "moves": []}
@@ -128,6 +134,10 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
     # Save move
     add_move(db, game_id, move_uci)
     moves.append(move_uci)
+
+    # Ensure move is committed immediately
+    db.flush()
+    db.commit()
 
     # Check if this is a human-vs-ai game and not over
     white_player = getattr(game, 'white_id', None)
@@ -199,6 +209,10 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
 
+            # Ensure AI move is committed immediately
+            db.flush()
+            db.commit()
+
             # Check game status after AI move
             game_status = "in_progress"
             if enforce_rules and board.is_game_over():
@@ -224,6 +238,9 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
                 from app.db.crud import update_game_result
                 try:
                     update_game_result(db, game_id, result, game_status.split(' - ')[0])
+                    # Ensure game result is committed immediately
+                    db.flush()
+                    db.commit()
                 except Exception as e:
                     logger.warning(f"Failed to update game result: {e}")
 
@@ -258,6 +275,9 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
         from app.db.crud import update_game_result
         try:
             update_game_result(db, game_id, result, game_status.split(' - ')[0])
+            # Ensure game result is committed immediately
+            db.flush()
+            db.commit()
         except Exception as e:
             logger.warning(f"Failed to update game result: {e}")
 
@@ -371,13 +391,17 @@ def api_get_all_games(db: Session = Depends(get_db)):
     Get all games for history display
     Returns: [{id, white_player, black_player, created_at, move_count, status, result, termination}]
     """
+    logger.info("Loading game history - starting request")
     from sqlalchemy import func
     try:
+        logger.debug("Querying database for games")
         games = db.query(Game).order_by(Game.created_at.desc()).limit(50).all()
+        logger.info(f"Found {len(games)} games in database")
 
         result = []
         for game in games:
             try:
+                logger.debug(f"Processing game {game.id}")
                 # Count moves
                 move_count = db.query(func.count(Move.id)).filter(Move.game_id == game.id).scalar() or 0
 
@@ -387,13 +411,13 @@ def api_get_all_games(db: Session = Depends(get_db)):
                 try:
                     if game.white:
                         white_name = game.white.name
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error getting white player name for game {game.id}: {e}")
                 try:
                     if game.black:
                         black_name = game.black.name
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error getting black player name for game {game.id}: {e}")
 
                 # Determine game status from database
                 is_finished = getattr(game, 'is_finished', 'false')
@@ -424,15 +448,15 @@ def api_get_all_games(db: Session = Depends(get_db)):
                 try:
                     if game.created_at:
                         created_at_str = game.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error formatting created_at for game {game.id}: {e}")
 
                 try:
                     finished_at = getattr(game, 'finished_at', None)
                     if finished_at:
                         finished_at_str = finished_at.strftime("%Y-%m-%d %H:%M:%S")
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error formatting finished_at for game {game.id}: {e}")
 
                 result.append({
                     "id": game.id,
@@ -446,17 +470,17 @@ def api_get_all_games(db: Session = Depends(get_db)):
                     "termination": getattr(game, 'termination', None),
                     "finished_at": finished_at_str
                 })
+                logger.debug(f"Successfully processed game {game.id}")
             except Exception as e:
                 logger.warning(f"Error processing game {game.id}: {e}")
                 # Skip this game but continue with others
                 continue
 
+        logger.info(f"Successfully processed {len(result)} games for history display")
         return {"games": result}
     except Exception as e:
-        logger.error(f"Error loading games: {e}")
-        return {"games": [], "error": "Failed to load games"}
-
-@router.get("/api/game/{game_id}/moves")
+        logger.error(f"Error loading games: {e}", exc_info=True)
+        return {"games": [], "error": f"Failed to load games: {str(e)}"}@router.get("/api/game/{game_id}/moves")
 def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
     """
     Get all moves for a specific game

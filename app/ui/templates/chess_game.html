@@ -263,6 +263,12 @@
                         statusDiv.id = 'game-status';
                         statusDiv.innerHTML = `<h3 style="color: red; text-align: center;">🏁 ${data.status}</h3>`;
                         document.getElementById('board').parentNode.insertBefore(statusDiv, document.getElementById('board').nextSibling);
+
+                        // Automatically refresh game history after a short delay to ensure database is updated
+                        setTimeout(() => {
+                            console.log('Game ended, refreshing game history');
+                            loadGameHistory();
+                        }, 1000);
                     }, 100);
                 }
 
@@ -373,12 +379,24 @@
             // Game History Functions
             async function loadGameHistory() {
                 try {
+                    console.log('Loading game history...');
+                    document.getElementById('game-history').innerHTML = '<div style="text-align: center; color: #666;">Loading games...</div>';
+
                     const response = await fetch('/api/games');
+                    console.log('Game history response status:', response.status);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
                     const data = await response.json();
+                    console.log('Game history data:', data);
 
                     let html = '<div style="border: 1px solid #ccc; border-radius: 4px;">';
 
-                    if (data.games && data.games.length > 0) {
+                    if (data.error) {
+                        html += `<div style="padding: 20px; text-align: center; color: red;">Server Error: ${data.error}</div>`;
+                    } else if (data.games && data.games.length > 0) {
                         for (const game of data.games) {
                             // Determine result display styling
                             let resultHtml = '';
@@ -432,9 +450,15 @@
                             viewGameMoves(gameId);
                         });
                     });
+
+                    console.log('Game history loaded successfully');
                 } catch (error) {
                     console.error('Error loading game history:', error);
-                    document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game history</div>';
+                    document.getElementById('game-history').innerHTML = `
+                        <div style="color: red; padding: 20px; text-align: center;">
+                            Error loading game history: ${error.message}
+                            <br><button onclick="loadGameHistory()" style="margin-top: 10px;">Retry</button>
+                        </div>`;
                 }
             }
 
