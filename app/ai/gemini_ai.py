@@ -14,9 +14,95 @@ logger = logging.getLogger(__name__)
 # Configure Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
+def _analyze_position_context(board: chess.Board, move_history: list = None) -> str:
+    """
+    Analyze the current position to provide rich contextual awareness to the AI.
+    This gives the AI situational intelligence without teaching chess rules.
+    """
+    context = []
+
+    # Game phase awareness
+    piece_count = len(board.piece_map())
+    if piece_count > 24:
+        context.append("Early game - pieces are still developing")
+    elif piece_count > 12:
+        context.append("Middle game - active piece maneuvering phase")
+    else:
+        context.append("Late game - precision and calculation critical")
+
+    # Material balance awareness
+    white_material = sum([piece.piece_type for piece in board.piece_map().values() if piece.color])
+    black_material = sum([piece.piece_type for piece in board.piece_map().values() if not piece.color])
+    material_diff = white_material - black_material
+    if abs(material_diff) > 2:
+        leader = "White" if material_diff > 0 else "Black"
+        context.append(f"Material imbalance: {leader} has significant advantage")
+
+    # King safety awareness
+    white_king_square = board.king(chess.WHITE)
+    black_king_square = board.king(chess.BLACK)
+
+    if white_king_square and board.is_attacked_by(chess.BLACK, white_king_square):
+        context.append("White king under direct pressure")
+    if black_king_square and board.is_attacked_by(chess.WHITE, black_king_square):
+        context.append("Black king under direct pressure")
+
+    # Check status
+    if board.is_check():
+        context.append(f"{'White' if board.turn else 'Black'} king is in check - immediate response required")
+
+    # Capture opportunities
+    captures = [move for move in board.legal_moves if board.is_capture(move)]
+    if captures:
+        context.append(f"{len(captures)} capture possibilities available")
+
+    # Center control awareness
+    center_squares = [chess.D4, chess.D5, chess.E4, chess.E5]
+    controlled_by_current = sum(1 for sq in center_squares if board.is_attacked_by(board.turn, sq))
+    context.append(f"You control {controlled_by_current}/4 central squares")
+
+    # Piece mobility
+    current_moves = len(list(board.legal_moves))
+    board.turn = not board.turn  # Switch to opponent
+    opponent_moves = len(list(board.legal_moves))
+    board.turn = not board.turn  # Switch back
+
+    if current_moves > opponent_moves + 5:
+        context.append("You have significantly more piece mobility")
+    elif opponent_moves > current_moves + 5:
+        context.append("Opponent has significantly more piece mobility")
+
+    # Recent activity pattern
+    if move_history and len(move_history) >= 4:
+        recent_moves = move_history[-4:]
+        repeated_pieces = []
+        for i in range(0, len(recent_moves), 2):
+            if i + 2 < len(recent_moves):
+                if recent_moves[i][:2] == recent_moves[i+2][:2]:
+                    repeated_pieces.append(recent_moves[i][:2])
+        if repeated_pieces:
+            context.append(f"Recent pattern: piece on {repeated_pieces[0]} has moved multiple times")
+
+    # Castling status
+    can_castle_kingside = board.has_kingside_castling_rights(board.turn)
+    can_castle_queenside = board.has_queenside_castling_rights(board.turn)
+    if can_castle_kingside or can_castle_queenside:
+        context.append("Castling still available for improved king safety")
+
+    # Pawn structure insights
+    pawns = [sq for sq, piece in board.piece_map().items()
+             if piece.piece_type == chess.PAWN and piece.color == board.turn]
+    if len(pawns) > 0:
+        files = [chess.square_file(sq) for sq in pawns]
+        doubled = len(files) != len(set(files))
+        if doubled:
+            context.append("You have doubled pawns - consider piece activity compensation")
+
+    return " | ".join(context)
+
 def get_gemini_chess_move(fen: str, move_history: list = None, invalid_moves: list = None) -> str:
     """
-    Get a chess move from Gemini AI.
+    Get a chess move from Gemini AI with enhanced situational awareness.
 
     Args:
         fen: Current board position in FEN notation
@@ -36,27 +122,33 @@ def get_gemini_chess_move(fen: str, move_history: list = None, invalid_moves: li
         # Create board from FEN to get current position info
         board = chess.Board(fen)
 
-        # Build a comprehensive prompt optimized for Gemini's chess capabilities
-        prompt = f"""You are an expert chess player with deep understanding of tactics, strategy, and positional play.
+        # Enhanced situational awareness
+        position_context = _analyze_position_context(board, move_history)
 
-Current position: {fen}
-Turn: {"White" if board.turn else "Black"}
+        # Build a comprehensive prompt with rich context
+        prompt = f"""You are analyzing a chess position with complete situational awareness.
 
-{f"Game history (last 10 moves): {' '.join(move_history[-10:])}" if move_history else ""}
+CURRENT BOARD STATE:
+Position: {fen}
+Turn: {"White" if board.turn else "Black"} to move
 
-{f"Invalid moves to avoid: {', '.join(invalid_moves[-5:])}" if invalid_moves else ""}
+SITUATIONAL CONTEXT:
+{position_context}
 
-Analyze this position considering:
-1. Tactical opportunities (pins, forks, discovered attacks, etc.)
-2. Strategic factors (piece activity, pawn structure, king safety)
-3. Opening principles or endgame technique as appropriate
+RECENT GAME FLOW:
+{f"Last 8 moves: {' '.join(move_history[-8:])}" if move_history and len(move_history) > 0 else "Game just started"}
+{f"Moves that failed: {', '.join(invalid_moves[-3:])}" if invalid_moves else "No invalid attempts"}
 
-First, describe the key features of the position.
-Then provide your best move in UCI notation.
+AVAILABLE OPTIONS:
+You have {len(list(board.legal_moves))} legal moves available.
 
-Format your response exactly like this:
-BOARD: [analyze key pieces, threats, and strategic factors]
-MOVE: [your move in UCI notation like e2e4]"""
+Your task: Choose the most intelligent move considering the current threats, opportunities, and position dynamics described above.
+
+Provide your analysis and move in this exact format:
+BOARD: [Your assessment of the key features and dynamics in this specific position]
+MOVE: [your move in UCI notation like e2e4]
+
+Be decisive and choose the move that best responds to the current position."""
 
         logger.debug(f"Gemini prompt: {prompt}")
 
