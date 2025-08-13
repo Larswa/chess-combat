@@ -52,6 +52,61 @@ def migrate_database(database_url: str = None):
         print("Creating database tables...")
         Base.metadata.create_all(bind=engine)
 
+        # Check and add missing columns to existing tables
+        print("Checking for missing columns...")
+        with engine.connect() as conn:
+            # Check if games table exists and add missing columns
+            if not database_url.startswith("sqlite"):
+                # For PostgreSQL, check and add missing columns
+                missing_columns = []
+
+                # Check for is_finished column
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'games' AND column_name = 'is_finished'
+                """))
+                if not result.fetchone():
+                    missing_columns.append("is_finished VARCHAR DEFAULT 'false'")
+
+                # Check for result column
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'games' AND column_name = 'result'
+                """))
+                if not result.fetchone():
+                    missing_columns.append("result VARCHAR")
+
+                # Check for termination column
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'games' AND column_name = 'termination'
+                """))
+                if not result.fetchone():
+                    missing_columns.append("termination VARCHAR")
+
+                # Check for finished_at column
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'games' AND column_name = 'finished_at'
+                """))
+                if not result.fetchone():
+                    missing_columns.append("finished_at TIMESTAMP")
+
+                # Add missing columns
+                for column in missing_columns:
+                    print(f"Adding missing column: {column}")
+                    conn.execute(text(f"ALTER TABLE games ADD COLUMN {column}"))
+                    conn.commit()
+
+                if missing_columns:
+                    print(f"Added {len(missing_columns)} missing columns to games table")
+                else:
+                    print("All required columns already exist in games table")
+
         # Verify tables were created
         with engine.connect() as conn:
             if database_url.startswith("sqlite"):
