@@ -68,11 +68,11 @@ class TestOpenAI:
             call_args = mock_client.chat.completions.create.call_args
             messages = call_args[1]['messages']
 
-            # Check that the user message contains game phase information
+            # Check that the user message contains enhanced situational awareness
             user_message = messages[1]['content']
-            assert "opening" in user_message.lower()
+            assert "early game" in user_message.lower()  # Updated to match our enhanced context
             assert "e2e4 e7e5 g1f3 b8c6" in user_message  # Check move history is included
-            assert "Game history" in user_message
+            assert "SITUATIONAL CONTEXT" in user_message  # Check enhanced context section
 
     def test_openai_uci_extraction(self):
         """Test UCI move extraction from various OpenAI responses"""
