@@ -361,10 +361,7 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
             return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
         else:
             logger.warning("AI did not return any move in AI-vs-AI")
-
-            add_move(db, game_id, ai_move)
-            moves.append(ai_move)
-            return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
+            return {"fen": board.fen(), "moves": moves, "status": "no_move"}
 
     return {"fen": board.fen(), "moves": moves, "status": "no_move"}
 
