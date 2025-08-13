@@ -1,5 +1,5 @@
 apiVersion: v2
 name: chess-combat
-version: 0.1.44
+version: 0.1.45
 description: Helm chart for deploying the chess-combat FastAPI application
-appVersion: "0.1.44"
+appVersion: "0.1.45"
