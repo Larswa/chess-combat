@@ -40,6 +40,50 @@ def api_test():
     """Simple test endpoint."""
     return {"status": "API is working", "timestamp": "2025-08-13"}
 
+# Debug endpoint to check game IDs
+@router.get("/api/debug/games")
+def api_debug_games(db: Session = Depends(get_db)):
+    """Debug endpoint to check what games exist."""
+    try:
+        games = db.query(Game).all()
+        game_list = []
+        for game in games:
+            game_list.append({
+                "id": game.id,
+                "white_id": getattr(game, 'white_id', None),
+                "black_id": getattr(game, 'black_id', None),
+                "has_white": hasattr(game, 'white') and game.white is not None,
+                "has_black": hasattr(game, 'black') and game.black is not None,
+                "move_count": len(game.moves) if hasattr(game, 'moves') else 0
+            })
+        return {"games": game_list, "total": len(game_list)}
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {e}")
+        return {"error": str(e)}
+
+# Debug endpoint to check specific game
+@router.get("/api/debug/game/{game_id}")
+def api_debug_game(game_id: int, db: Session = Depends(get_db)):
+    """Debug endpoint to check a specific game."""
+    try:
+        logger.info(f"Debug: Looking for game {game_id}")
+        game = get_game(db, game_id)
+        if not game:
+            return {"error": f"Game {game_id} not found", "game_id": game_id}
+
+        return {
+            "game_id": game.id,
+            "exists": True,
+            "white_id": getattr(game, 'white_id', None),
+            "black_id": getattr(game, 'black_id', None),
+            "has_moves": hasattr(game, 'moves'),
+            "move_count": len(game.moves) if hasattr(game, 'moves') else 0,
+            "created_at": str(game.created_at) if hasattr(game, 'created_at') else None
+        }
+    except Exception as e:
+        logger.error(f"Error in debug game endpoint: {e}")
+        return {"error": str(e), "game_id": game_id}
+
 # --- API for UI ---
 
 @router.post("/api/new-game")
@@ -494,7 +538,7 @@ def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
     Get all moves for a specific game
     Returns: {game_info, moves: [{move_number, white_move, black_move}]}
     """
-    logger.info(f"Getting moves for game {game_id}")
+    logger.info(f"*** MOVES ENDPOINT CALLED: Getting moves for game {game_id} ***")
     game = get_game(db, game_id)
     if not game:
         logger.warning(f"Game {game_id} not found for moves request")
