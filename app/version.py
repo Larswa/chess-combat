@@ -57,5 +57,6 @@ def get_version_info() -> dict:
         "version": get_version(),
         "build_date": get_build_date(),
         "deployment_timestamp": get_deployment_timestamp(),
+        "release_timestamp": get_deployment_timestamp(),  # Alias for clarity
         "name": "Chess Combat"
     }

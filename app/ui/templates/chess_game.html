@@ -600,7 +600,7 @@
                 fetch('/api/version')
                     .then(response => response.json())
                     .then(data => {
-                        versionInfo.textContent = `${data.name} v${data.version} (${data.deployment_timestamp})`;
+                        versionInfo.textContent = `${data.name} v${data.version} (Released: ${data.deployment_timestamp})`;
                     })
                     .catch(error => {
                         console.log('Could not load version info:', error);
@@ -614,7 +614,7 @@
         style="margin-top: 2em; padding: 1em 0; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 0.9em;">
         <div id="version-info">
             {% if version_info %}
-            {{ version_info.name }} v{{ version_info.version }} ({{ version_info.deployment_timestamp }})
+            {{ version_info.name }} v{{ version_info.version }} (Released: {{ version_info.deployment_timestamp }})
             {% else %}
             Chess Combat
             {% endif %}
