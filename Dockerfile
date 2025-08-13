@@ -19,9 +19,9 @@ COPY app ./app
 # Copy VERSION.txt
 COPY VERSION.txt ./
 
-# Add build date (will be set during build)
-ARG BUILD_DATE
-ENV BUILD_DATE=${BUILD_DATE}
+# Add build timestamp (will be set during build)
+ARG BUILD_TIMESTAMP
+ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
 
 # Expose port
 EXPOSE 8000

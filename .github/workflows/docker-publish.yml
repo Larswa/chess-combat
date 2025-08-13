@@ -99,12 +99,12 @@ jobs:
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
           git push origin main --tags
 
-      - name: Set build date
-        id: build_date
+      - name: Set build timestamp
+        id: build_timestamp
         run: |
-          BUILD_DATE=$(date -u +'%Y-%m-%d')
-          echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "Build date set to: $BUILD_DATE"
+          BUILD_TIMESTAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          echo "timestamp=$BUILD_TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "Build timestamp set to: $BUILD_TIMESTAMP"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -112,7 +112,7 @@ jobs:
           context: .
           push: true
           build-args: |
-            BUILD_DATE=${{ steps.build_date.outputs.date }}
+            BUILD_TIMESTAMP=${{ steps.build_timestamp.outputs.timestamp }}
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }}
