@@ -380,6 +380,30 @@
 
                     if (data.games && data.games.length > 0) {
                         for (const game of data.games) {
+                            // Determine result display styling
+                            let resultHtml = '';
+                            let resultStyle = '';
+
+                            if (game.status === 'Finished') {
+                                resultHtml = `<div style="font-size: 12px; margin-top: 4px; font-weight: bold; ${resultStyle}">
+                                    🏁 ${game.result_description}
+                                </div>`;
+
+                                // Add color coding for wins/draws
+                                if (game.result_description.includes('wins')) {
+                                    resultStyle = 'color: #2e7d32;'; // Green for wins
+                                } else if (game.result_description.includes('Draw')) {
+                                    resultStyle = 'color: #f57c00;'; // Orange for draws
+                                }
+                                resultHtml = `<div style="font-size: 12px; margin-top: 4px; font-weight: bold; ${resultStyle}">
+                                    🏁 ${game.result_description}
+                                </div>`;
+                            } else {
+                                resultHtml = `<div style="font-size: 12px; margin-top: 4px; color: #666;">
+                                    ⏳ ${game.result_description}
+                                </div>`;
+                            }
+
                             html += `
                             <div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;"
                                  data-game-id="${game.id}" class="game-item">
@@ -390,6 +414,7 @@
                                 <div style="font-size: 12px; color: #666;">
                                     ${game.created_at} | ${game.move_count} moves
                                 </div>
+                                ${resultHtml}
                             </div>
                         `;
                         }

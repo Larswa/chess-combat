@@ -372,7 +372,7 @@ def api_ai_move(data: dict = Body(...), db: Session = Depends(get_db)):
 def api_get_all_games(db: Session = Depends(get_db)):
     """
     Get all games for history display
-    Returns: [{id, white_player, black_player, created_at, move_count, status}]
+    Returns: [{id, white_player, black_player, created_at, move_count, status, result, termination}]
     """
     from sqlalchemy import func
     games = db.query(Game).order_by(Game.created_at.desc()).limit(50).all()
@@ -382,8 +382,25 @@ def api_get_all_games(db: Session = Depends(get_db)):
         # Count moves
         move_count = db.query(func.count(Move.id)).filter(Move.game_id == game.id).scalar()
 
-        # Determine game status (simplified)
-        status = "Completed" if move_count > 0 else "In Progress"
+        # Determine game status from database
+        if game.is_finished == "true":
+            status = "Finished"
+            # Format result description
+            if game.result == "1-0":
+                result_desc = f"{game.white.name if game.white else 'White'} wins"
+            elif game.result == "0-1":
+                result_desc = f"{game.black.name if game.black else 'Black'} wins"
+            elif game.result == "1/2-1/2":
+                result_desc = "Draw"
+            else:
+                result_desc = game.result or "Game finished"
+
+            # Add termination reason if available
+            if game.termination:
+                result_desc += f" by {game.termination}"
+        else:
+            status = "In Progress"
+            result_desc = "Game ongoing"
 
         result.append({
             "id": game.id,
@@ -391,7 +408,11 @@ def api_get_all_games(db: Session = Depends(get_db)):
             "black_player": game.black.name if game.black else "Unknown",
             "created_at": game.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "move_count": move_count,
-            "status": status
+            "status": status,
+            "result": game.result,
+            "result_description": result_desc,
+            "termination": game.termination,
+            "finished_at": game.finished_at.strftime("%Y-%m-%d %H:%M:%S") if game.finished_at else None
         })
 
     return {"games": result}
