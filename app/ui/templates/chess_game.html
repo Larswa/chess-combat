@@ -252,6 +252,20 @@
                     return 'snapback';
                 }
 
+                // Check for game end conditions
+                if (data.status && data.status !== 'in_progress' && data.status !== 'ok') {
+                    // Game has ended - show notification
+                    setTimeout(() => {
+                        alert(`Game Over: ${data.status}`);
+                        // Optionally disable further moves
+                        board.destroy();
+                        const statusDiv = document.getElementById('game-status') || document.createElement('div');
+                        statusDiv.id = 'game-status';
+                        statusDiv.innerHTML = `<h3 style="color: red; text-align: center;">🏁 ${data.status}</h3>`;
+                        document.getElementById('board').parentNode.insertBefore(statusDiv, document.getElementById('board').nextSibling);
+                    }, 100);
+                }
+
                 // Update the board position
                 if (enforceRules) {
                     game.load(data.fen);

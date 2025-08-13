@@ -198,12 +198,70 @@ def api_move(data: dict = Body(...), db: Session = Depends(get_db)):
 
             add_move(db, game_id, ai_move)
             moves.append(ai_move)
-            return {"fen": board.fen(), "moves": moves, "status": "ok", "ai_move": ai_move}
+
+            # Check game status after AI move
+            game_status = "in_progress"
+            if enforce_rules and board.is_game_over():
+                if board.is_checkmate():
+                    winner = "White" if board.turn == chess.BLACK else "Black"
+                    game_status = f"checkmate - {winner} wins!"
+                    result = f"{1 if winner == 'White' else 0}-{0 if winner == 'White' else 1}"
+                    logger.info(f"Game {game_id} ended: {game_status}")
+                elif board.is_stalemate():
+                    game_status = "stalemate - Draw!"
+                    result = "1/2-1/2"
+                    logger.info(f"Game {game_id} ended: {game_status}")
+                elif board.is_insufficient_material():
+                    game_status = "draw - Insufficient material"
+                    result = "1/2-1/2"
+                    logger.info(f"Game {game_id} ended: {game_status}")
+                else:
+                    game_status = "draw"
+                    result = "1/2-1/2"
+                    logger.info(f"Game {game_id} ended: {game_status}")
+
+                # Update game in database
+                from app.db.crud import update_game_result
+                try:
+                    update_game_result(db, game_id, result, game_status.split(' - ')[0])
+                except Exception as e:
+                    logger.warning(f"Failed to update game result: {e}")
+
+            return {"fen": board.fen(), "moves": moves, "status": game_status, "ai_move": ai_move}
         else:
             logger.warning("AI did not return any move")
     else:
         logger.debug("AI move not needed or conditions not met")
-    return {"fen": board.fen(), "moves": moves, "status": "ok"}
+
+    # Check game status after human move
+    game_status = "in_progress"
+    if enforce_rules and board.is_game_over():
+        if board.is_checkmate():
+            winner = "White" if board.turn == chess.BLACK else "Black"
+            game_status = f"checkmate - {winner} wins!"
+            result = f"{1 if winner == 'White' else 0}-{0 if winner == 'White' else 1}"
+            logger.info(f"Game {game_id} ended: {game_status}")
+        elif board.is_stalemate():
+            game_status = "stalemate - Draw!"
+            result = "1/2-1/2"
+            logger.info(f"Game {game_id} ended: {game_status}")
+        elif board.is_insufficient_material():
+            game_status = "draw - Insufficient material"
+            result = "1/2-1/2"
+            logger.info(f"Game {game_id} ended: {game_status}")
+        else:
+            game_status = "draw"
+            result = "1/2-1/2"
+            logger.info(f"Game {game_id} ended: {game_status}")
+
+        # Update game in database
+        from app.db.crud import update_game_result
+        try:
+            update_game_result(db, game_id, result, game_status.split(' - ')[0])
+        except Exception as e:
+            logger.warning(f"Failed to update game result: {e}")
+
+    return {"fen": board.fen(), "moves": moves, "status": game_status}
 
 @router.get("/api/game/{game_id}")
 def api_get_game(game_id: int, db: Session = Depends(get_db)):
