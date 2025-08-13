@@ -83,7 +83,7 @@ def test_ci_move_making(ci_client):
     }
     response = ci_client.post("/api/move", json=move_data)
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    assert response.json()["status"] == "in_progress"  # Game should be in progress after a valid move
 
 def test_ci_checkmate_detection(ci_client):
     """Test checkmate detection in CI environment"""
