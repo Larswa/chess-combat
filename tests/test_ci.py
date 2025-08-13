@@ -110,10 +110,16 @@ def test_ci_checkmate_detection(ci_client):
         print(f"Move {i+1}: Status: {move_result.get('status', 'N/A')}")
 
     # The key insight: check if the final move response indicates checkmate
-    # Instead of relying on a separate API call, use the move response
+    # The status should now indicate checkmate
+    final_status = move_result.get('status', 'unknown')
+    print(f"Final move status: {final_status}")
+
+    # Check both the status message and the chess board state
+    assert "checkmate" in final_status.lower(), f"Status should indicate checkmate, but got: {final_status}"
+
+    # Also verify with chess library
     final_fen = move_result.get('fen')
     if final_fen:
-        # Manually verify checkmate using chess library
         import chess
         board = chess.Board(final_fen)
         print(f"Board from final FEN is_game_over: {board.is_game_over()}")
