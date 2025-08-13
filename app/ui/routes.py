@@ -372,47 +372,89 @@ def api_get_all_games(db: Session = Depends(get_db)):
     Returns: [{id, white_player, black_player, created_at, move_count, status, result, termination}]
     """
     from sqlalchemy import func
-    games = db.query(Game).order_by(Game.created_at.desc()).limit(50).all()
+    try:
+        games = db.query(Game).order_by(Game.created_at.desc()).limit(50).all()
 
-    result = []
-    for game in games:
-        # Count moves
-        move_count = db.query(func.count(Move.id)).filter(Move.game_id == game.id).scalar()
+        result = []
+        for game in games:
+            try:
+                # Count moves
+                move_count = db.query(func.count(Move.id)).filter(Move.game_id == game.id).scalar() or 0
 
-        # Determine game status from database
-        if game.is_finished == "true":
-            status = "Finished"
-            # Format result description
-            if game.result == "1-0":
-                result_desc = f"{game.white.name if game.white else 'White'} wins"
-            elif game.result == "0-1":
-                result_desc = f"{game.black.name if game.black else 'Black'} wins"
-            elif game.result == "1/2-1/2":
-                result_desc = "Draw"
-            else:
-                result_desc = game.result or "Game finished"
+                # Safely get player names
+                white_name = "Unknown"
+                black_name = "Unknown"
+                try:
+                    if game.white:
+                        white_name = game.white.name
+                except:
+                    pass
+                try:
+                    if game.black:
+                        black_name = game.black.name
+                except:
+                    pass
 
-            # Add termination reason if available
-            if game.termination:
-                result_desc += f" by {game.termination}"
-        else:
-            status = "In Progress"
-            result_desc = "Game ongoing"
+                # Determine game status from database
+                is_finished = getattr(game, 'is_finished', 'false')
+                if is_finished == "true":
+                    status = "Finished"
+                    # Format result description
+                    game_result = getattr(game, 'result', None)
+                    if game_result == "1-0":
+                        result_desc = f"{white_name} wins"
+                    elif game_result == "0-1":
+                        result_desc = f"{black_name} wins"
+                    elif game_result == "1/2-1/2":
+                        result_desc = "Draw"
+                    else:
+                        result_desc = game_result or "Game finished"
 
-        result.append({
-            "id": game.id,
-            "white_player": game.white.name if game.white else "Unknown",
-            "black_player": game.black.name if game.black else "Unknown",
-            "created_at": game.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "move_count": move_count,
-            "status": status,
-            "result": game.result,
-            "result_description": result_desc,
-            "termination": game.termination,
-            "finished_at": game.finished_at.strftime("%Y-%m-%d %H:%M:%S") if game.finished_at else None
-        })
+                    # Add termination reason if available
+                    termination = getattr(game, 'termination', None)
+                    if termination:
+                        result_desc += f" by {termination}"
+                else:
+                    status = "In Progress"
+                    result_desc = "Game ongoing"
 
-    return {"games": result}
+                # Safely format dates
+                created_at_str = "Unknown"
+                finished_at_str = None
+                try:
+                    if game.created_at:
+                        created_at_str = game.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    pass
+
+                try:
+                    finished_at = getattr(game, 'finished_at', None)
+                    if finished_at:
+                        finished_at_str = finished_at.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    pass
+
+                result.append({
+                    "id": game.id,
+                    "white_player": white_name,
+                    "black_player": black_name,
+                    "created_at": created_at_str,
+                    "move_count": move_count,
+                    "status": status,
+                    "result": getattr(game, 'result', None),
+                    "result_description": result_desc,
+                    "termination": getattr(game, 'termination', None),
+                    "finished_at": finished_at_str
+                })
+            except Exception as e:
+                logger.warning(f"Error processing game {game.id}: {e}")
+                # Skip this game but continue with others
+                continue
+
+        return {"games": result}
+    except Exception as e:
+        logger.error(f"Error loading games: {e}")
+        return {"games": [], "error": "Failed to load games"}
 
 @router.get("/api/game/{game_id}/moves")
 def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
