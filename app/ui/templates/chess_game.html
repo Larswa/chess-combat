@@ -464,10 +464,19 @@
 
             async function viewGameMoves(gameId) {
                 try {
+                    console.log(`Loading moves for game ${gameId}`);
                     const response = await fetch(`/api/game/${gameId}/moves`);
-                    const data = await response.json();
 
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
                     console.log('Game moves data:', data);
+
+                    if (!data.moves || !data.game_info) {
+                        throw new Error('Invalid response format - missing moves or game_info');
+                    }
 
                     // Create a flat array of all moves for replay
                     const allMoves = [];
@@ -650,7 +659,11 @@
                     goToMove(0);
                 } catch (error) {
                     console.error('Error loading game moves:', error);
-                    document.getElementById('game-history').innerHTML = '<div style="color: red;">Error loading game moves</div>';
+                    document.getElementById('game-history').innerHTML = `
+                        <div style="color: red; padding: 20px; text-align: center;">
+                            Error loading game moves for Game #${gameId}: ${error.message}
+                            <br><button onclick="loadGameHistory()" style="margin-top: 10px;">Back to Game List</button>
+                        </div>`;
                 }
             }
 

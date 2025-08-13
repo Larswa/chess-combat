@@ -34,6 +34,12 @@ def api_version():
     """Get version information."""
     return get_version_info()
 
+# Test endpoint
+@router.get("/api/test")
+def api_test():
+    """Simple test endpoint."""
+    return {"status": "API is working", "timestamp": "2025-08-13"}
+
 # --- API for UI ---
 
 @router.post("/api/new-game")
@@ -480,17 +486,23 @@ def api_get_all_games(db: Session = Depends(get_db)):
         return {"games": result}
     except Exception as e:
         logger.error(f"Error loading games: {e}", exc_info=True)
-        return {"games": [], "error": f"Failed to load games: {str(e)}"}@router.get("/api/game/{game_id}/moves")
+        return {"games": [], "error": f"Failed to load games: {str(e)}"}
+
+@router.get("/api/game/{game_id}/moves")
 def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
     """
     Get all moves for a specific game
     Returns: {game_info, moves: [{move_number, white_move, black_move}]}
     """
+    logger.info(f"Getting moves for game {game_id}")
     game = get_game(db, game_id)
     if not game:
+        logger.warning(f"Game {game_id} not found for moves request")
         raise HTTPException(status_code=404, detail="Game not found")
 
+    logger.debug(f"Found game {game_id}, fetching moves")
     moves = db.query(Move).filter(Move.game_id == game_id).order_by(Move.id).all()
+    logger.info(f"Found {len(moves)} moves for game {game_id}")
 
     # Group moves by pairs (white, black)
     move_pairs = []
@@ -503,13 +515,36 @@ def api_get_game_moves(game_id: int, db: Session = Depends(get_db)):
             "black_move": black_move
         })
 
+    game_info = {
+        "id": game.id,
+        "white_player": "Unknown",
+        "black_player": "Unknown",
+        "created_at": "Unknown"
+    }
+
+    # Safely get player names with error handling
+    try:
+        if hasattr(game, 'white') and game.white:
+            game_info["white_player"] = game.white.name
+    except Exception as e:
+        logger.warning(f"Error getting white player name for game {game_id}: {e}")
+
+    try:
+        if hasattr(game, 'black') and game.black:
+            game_info["black_player"] = game.black.name
+    except Exception as e:
+        logger.warning(f"Error getting black player name for game {game_id}: {e}")
+
+    # Safely format creation date
+    try:
+        if game.created_at:
+            game_info["created_at"] = game.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e:
+        logger.warning(f"Error formatting created_at for game {game_id}: {e}")
+
+    logger.info(f"Returning {len(move_pairs)} move pairs for game {game_id}")
     return {
-        "game_info": {
-            "id": game.id,
-            "white_player": game.white.name if game.white else "Unknown",
-            "black_player": game.black.name if game.black else "Unknown",
-            "created_at": game.created_at.strftime("%Y-%m-%d %H:%M:%S")
-        },
+        "game_info": game_info,
         "moves": move_pairs
     }
 
