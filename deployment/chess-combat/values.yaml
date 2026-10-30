@@ -6,7 +6,7 @@ app:
 
 image:
   repository: nexuscr.factus.dk/chess-combat
-  tag: "0.1.52"
+  tag: "0.1.53"
   pullPolicy: IfNotPresent
 
 # Image pull secrets
