@@ -22,7 +22,7 @@ class TestOpenAI:
         # Mock environment without API key
         with patch.dict(os.environ, {}, clear=True):
             # Should raise exception when no API key is configured
-            with pytest.raises(Exception, match="api_key client option must be set"):
+            with pytest.raises(Exception, match="api_key client option must be set|Missing credentials"):
                 get_openai_chess_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
 
     @patch('app.ai.openai_ai._get_openai_client')

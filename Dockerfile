@@ -1,57 +1,30 @@
-# Use official Python image
-FROM python:3.11-slim
+# Build stage: full image with pip (and a compiler if a dependency lacks wheels)
+FROM dhi.io/python:3.11.18-debian13-dev AS builder
+WORKDIR /build
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --target=/deps -r requirements.txt
 
-# Set work directory
+# Runtime stage: distroless-style (no shell, no pip), nonroot uid 65532
+FROM dhi.io/python:3.11.18-debian13
 WORKDIR /app
 
-# Install system dependencies and Python packages in one layer
-COPY requirements.txt ./
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && pip install --no-cache-dir -r requirements.txt \
-    && apt-get purge -y --auto-remove build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /root/.cache/pip
+COPY --from=builder /deps /deps
 
-# Copy app code
+# Copy app code, migration script, startup entrypoint and VERSION.txt
 COPY app ./app
-
-# Copy migration script and VERSION.txt
-COPY migrate_db.py ./
-COPY VERSION.txt ./
+COPY migrate_db.py start.py VERSION.txt ./
 
 # Add build timestamp (will be set during build)
 ARG BUILD_TIMESTAMP
 ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
 
-# Expose port
 EXPOSE 8000
 
-# Set environment variables (override in docker run if needed)
-ENV PYTHONUNBUFFERED=1
+# /deps holds the installed packages (no pip/site-packages in runtime image)
+ENV PYTHONPATH=/deps:/app \
+    PYTHONUNBUFFERED=1
 
-# Create startup script that runs migration then starts the app
-COPY <<EOF /app/start.sh
-#!/bin/bash
-set -e
+USER 65532:65532
 
-echo "Chess Combat - Starting container..."
-
-# Run database migration
-echo "Running database migration..."
-if python3 migrate_db.py; then
-    echo "Database migration completed successfully"
-else
-    echo "Database migration failed, but continuing to start application..."
-    echo "The application will create tables automatically if possible"
-fi
-
-# Start the FastAPI application
-echo "Starting FastAPI application..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
-EOF
-
-RUN chmod +x /app/start.sh
-
-# Start with migration then FastAPI app
-CMD ["/app/start.sh"]
+# start.py runs the migration (failure tolerated) then starts uvicorn; no shell needed
+CMD ["python3", "/app/start.py"]
