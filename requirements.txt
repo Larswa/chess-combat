@@ -1,6 +1,6 @@
 fastapi
 python-chess
-sqlalchemy
+sqlalchemy<2.1
 psycopg2-binary
 requests
 pytest
